@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labyrinth Of Grief — Game Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0806;
+    --surface: #120f0a;
+    --surface2: #1a1410;
+    --surface3: #221c15;
+    --border: #2e2318;
+    --amber: #a01a1a;
+    --amber-bright: #e03030;
+    --amber-dim: #6b1a1a;
+    --amber-glow: rgba(180,30,30,0.12);
+    --red: #8b2a1a;
+    --red-bright: #d44a2a;
+    --green: #2a5c2a;
+    --green-bright: #4a9c4a;
+    --text: #d4c4a0;
+    --text-dim: #7a6a50;
+    --text-bright: #f0e0c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 16px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  header {
+    background: linear-gradient(180deg, #0d0a06 0%, var(--surface) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.6);
+  }
+  .logo {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: var(--amber-bright);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .logo-icon {
+    width: 24px; height: 24px;
+    background: var(--amber);
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    animation: torchflicker 3s ease-in-out infinite;
+  }
+  @keyframes torchflicker {
+    0%,100%{opacity:1;transform:scale(1)}
+    25%{opacity:0.8;transform:scale(0.97)}
+    50%{opacity:1;transform:scale(1.02)}
+    75%{opacity:0.9;transform:scale(0.98)}
+  }
+  .header-stats { display:flex; gap:2rem; align-items:center; }
+  .stat-item { text-align:center; }
+  .stat-num { font-family:'Cinzel',serif; font-size:1.4rem; font-weight:600; color:var(--amber-bright); display:block; line-height:1; }
+  .stat-label { font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; }
+  .stat-divider { width:1px; height:32px; background:var(--border); }
+  .progress-bar-wrap {
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    padding:0.6rem 2rem;
+    display:flex;
+    align-items:center;
+    gap:1rem;
+  }
+  .progress-label { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; white-space:nowrap; min-width:120px; }
+  .progress-track { flex:1; height:6px; background:var(--surface3); border-radius:3px; overflow:hidden; border:1px solid var(--border); }
+  .progress-fill { height:100%; background:linear-gradient(90deg,var(--amber-dim),var(--amber-bright)); border-radius:3px; transition:width 0.5s ease; box-shadow:0 0 8px var(--amber); }
+  .progress-pct { font-family:'Cinzel',serif; font-size:0.85rem; color:var(--amber-bright); min-width:40px; text-align:right; }
+  .container { display:grid; grid-template-columns:260px 1fr; height:calc(100vh - 106px); overflow:hidden; }
+  .sidebar { background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--amber-dim) var(--surface); }
+  .sidebar::-webkit-scrollbar{width:4px}
+  .sidebar::-webkit-scrollbar-track{background:var(--surface)}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--amber-dim);border-radius:2px}
+  .sidebar-section-title { font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.15em; color:var(--text-dim); text-transform:uppercase; padding:1.2rem 1.2rem 0.5rem; border-top:1px solid var(--border); }
+  .sidebar-section-title:first-child { border-top:none; }
+  .phase-btn {
+    display:flex; align-items:center; gap:0.75rem; padding:0.65rem 1.2rem; cursor:pointer;
+    transition:all 0.15s; border-left:3px solid transparent; width:100%;
+    background:none; border-right:none; border-top:none; border-bottom:none;
+    text-align:left; color:var(--text); font-family:'Crimson Pro',serif; font-size:0.95rem;
+  }
+  .phase-btn:hover { background:var(--amber-glow); color:var(--text-bright); }
+  .phase-btn.active { background:var(--amber-glow); border-left-color:var(--amber); color:var(--amber-bright); }
+  .phase-num { font-family:'Cinzel',serif; font-size:0.7rem; color:var(--amber-dim); min-width:20px; }
+  .phase-btn.active .phase-num { color:var(--amber); }
+  .phase-mini-progress { margin-left:auto; font-size:0.7rem; color:var(--text-dim); }
+  .phase-btn.active .phase-mini-progress { color:var(--amber); }
+  .main-content { overflow-y:auto; padding:2rem; scrollbar-width:thin; scrollbar-color:var(--amber-dim) var(--bg); }
+  .main-content::-webkit-scrollbar{width:4px}
+  .main-content::-webkit-scrollbar-track{background:var(--bg)}
+  .main-content::-webkit-scrollbar-thumb{background:var(--amber-dim);border-radius:2px}
+  .panel { animation:fadeIn 0.25s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .panel-header { margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+  .panel-header-left { flex:1; }
+  .phase-tag { font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--amber-dim); margin-bottom:0.4rem; }
+  .panel-title { font-family:'Cinzel',serif; font-size:1.6rem; font-weight:600; color:var(--text-bright); line-height:1.2; margin-bottom:0.4rem; }
+  .panel-subtitle { font-size:1rem; color:var(--text-dim); font-style:italic; }
+  .phase-progress-ring { display:flex; flex-direction:column; align-items:center; gap:0.3rem; flex-shrink:0; }
+  .ring-pct { font-family:'Cinzel',serif; font-size:1.5rem; color:var(--amber-bright); line-height:1; }
+  .ring-label { font-size:0.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em; }
+  .task-group { margin-bottom:1.5rem; }
+  .task-group-header { font-family:'Cinzel',serif; font-size:0.75rem; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:0.6rem; padding-bottom:0.4rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.5rem; }
+  .group-count { color:var(--amber-dim); font-size:0.7rem; }
+  .task-item { display:flex; align-items:center; gap:0.75rem; padding:0.6rem 0.75rem; margin-bottom:3px; background:var(--surface); border:1px solid var(--border); border-radius:3px; cursor:pointer; transition:all 0.15s; position:relative; overflow:hidden; }
+  .task-item::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--border); transition:background 0.15s; }
+  .task-item:hover { border-color:var(--amber-dim); background:var(--surface2); }
+  .task-item:hover::before { background:var(--amber-dim); }
+  .task-item.done::before { background:var(--green-bright); }
+  .task-item.done { opacity:0.65; }
+  .task-item.inprogress::before { background:var(--amber); }
+  .task-item.blocked::before { background:var(--red-bright); }
+  .task-check { width:18px; height:18px; border:1px solid var(--border); border-radius:2px; background:var(--surface2); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:0.75rem; transition:all 0.15s; cursor:pointer; }
+  .task-item.done .task-check { background:var(--green); border-color:var(--green-bright); color:var(--green-bright); }
+  .task-item.inprogress .task-check { background:var(--amber-dim); border-color:var(--amber); color:var(--amber-bright); }
+  .task-item.blocked .task-check { background:var(--red); border-color:var(--red-bright); color:var(--red-bright); }
+  .task-text { flex:1; font-size:0.95rem; color:var(--text); line-height:1.3; }
+  .task-item.done .task-text { text-decoration:line-through; color:var(--text-dim); }
+  .task-status-btn { font-size:0.65rem; padding:2px 8px; border-radius:2px; border:1px solid; cursor:pointer; font-family:'Cinzel',serif; letter-spacing:0.05em; text-transform:uppercase; background:none; transition:all 0.15s; white-space:nowrap; }
+  .btn-todo { border-color:var(--text-dim); color:var(--text-dim); }
+  .btn-todo:hover { border-color:var(--amber-dim); color:var(--amber-dim); }
+  .btn-inprogress { border-color:var(--amber); color:var(--amber); }
+  .btn-done { border-color:var(--green-bright); color:var(--green-bright); }
+  .btn-blocked { border-color:var(--red-bright); color:var(--red-bright); }
+  .add-task-row { display:flex; gap:0.5rem; margin-top:0.75rem; margin-bottom:0.5rem; }
+  .add-task-input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:0.5rem 0.75rem; font-family:'Crimson Pro',serif; font-size:0.9rem; border-radius:3px; outline:none; transition:border-color 0.15s; }
+  .add-task-input:focus { border-color:var(--amber-dim); }
+  .add-task-input::placeholder { color:var(--text-dim); font-style:italic; }
+  .add-task-btn { background:var(--amber-dim); border:1px solid var(--amber); color:var(--amber-bright); padding:0.5rem 1rem; font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.1em; text-transform:uppercase; border-radius:3px; cursor:pointer; transition:all 0.15s; }
+  .add-task-btn:hover { background:var(--amber); color:var(--bg); }
+  .notes-section { margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid var(--border); }
+  .notes-label { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:0.5rem; }
+  .notes-input { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:0.75rem; font-family:'Crimson Pro',serif; font-size:0.95rem; line-height:1.6; font-style:italic; resize:vertical; min-height:90px; border-radius:3px; outline:none; transition:border-color 0.15s; }
+  .notes-input:focus { border-color:var(--amber-dim); }
+  .overview-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .overview-card { background:var(--surface); border:1px solid var(--border); padding:1rem; border-radius:3px; cursor:pointer; transition:all 0.15s; position:relative; overflow:hidden; }
+  .overview-card:hover { border-color:var(--amber-dim); background:var(--surface2); }
+  .overview-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--amber-dim),var(--amber-bright)); transform-origin:left; transition:transform 0.5s ease; }
+  .card-num { font-family:'Cinzel',serif; font-size:0.65rem; color:var(--amber-dim); letter-spacing:0.1em; margin-bottom:0.3rem; }
+  .card-title { font-family:'Cinzel',serif; font-size:0.9rem; font-weight:600; color:var(--text-bright); margin-bottom:0.4rem; line-height:1.3; }
+  .card-pct { font-size:1.8rem; font-family:'Cinzel',serif; color:var(--amber-bright); line-height:1; margin-bottom:0.2rem; }
+  .card-tasks { font-size:0.8rem; color:var(--text-dim); }
+  .legend { display:flex; gap:1.5rem; margin-bottom:1rem; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--text-dim); }
+  .legend-dot { width:8px; height:8px; border-radius:50%; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    Labyrinth Of Grief
+  </div>
+  <div class="header-stats">
+    <div class="stat-item">
+      <span class="stat-num" id="stat-done">0</span>
+      <span class="stat-label">Complete</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-inprog">0</span>
+      <span class="stat-label">In Progress</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item">
+      <span class="stat-num" id="stat-total">0</span>
+      <span class="stat-label">Total Tasks</span>
+    </div>
+  </div>
+</header>
+<div class="progress-bar-wrap">
+  <span class="progress-label">Overall Progress</span>
+  <div class="progress-track">
+    <div class="progress-fill" id="global-fill" style="width:0%"></div>
+  </div>
+  <span class="progress-pct" id="global-pct">0%</span>
+</div>
+<div class="container">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main-content" id="main-content"></div>
+</div>
+
+<script>
+const PHASES = [
+  { id:'overview', num:'★', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
+  {
+    id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning',
+    groups:[
+      { name:'Concept & Vision', tasks:['Define game title and tagline','Write one-page concept document','Define target platform (PC / Console)','Lock core emotional arc: confusion → rage → grief → calm','Lock narrative premise: protagonist, dog, dungeon'] },
+      { name:'Level Concepts', tasks:['Level 1 concept: "The Awakening" — dungeon ruins','Level 2 concept: "The Bone Cavern" — goblin crypt','Level 3 concept: "Hollow Sky Cathedral" — bat belfry','Intermission design: above-ground NPC village scene','Define emotional transition beats between each level'] },
+      { name:'Narrative Design', tasks:['Write protagonist backstory (amnesia arc)','Define memory fragments — what does the player recover?','Write NPC dialogue for intermission','Define dog presence cues throughout (barks, collar, ball)','Write final rescue scene script','Outline post-credits or epilogue beat'] },
+      { name:'Visual References & Moodboard', tasks:['Gather dungeon visual references (lighting, atmosphere)','Moodboard: dark palette progression across 3 levels','Reference sound design benchmarks (Limbo, Inside, Celeste)','Define UI/HUD aesthetic direction','Gather enemy visual references for all 6 types'] },
+      { name:'Mechanics Definition', tasks:['Define grappling hook feel & feedback targets','Define stealth system parameters (sight cones, alert states)','Define sound manipulation system for Level 3','Write behavior specification for all 6 enemy types','Define difficulty curve across all 3 levels'] },
+    ]
+  },
+  {
+    id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design',
+    groups:[
+      { name:'Level Design Documents', tasks:['Full LDD: Level 1 — Awakening (all rooms)','Full LDD: Level 2 — Bone Cavern (all 17 zones)','Full LDD: Level 3 — Hollow Sky Cathedral (all 5 phases)','Define all secret rooms and collectibles (collar, ball, hearts)','Define all puzzle solutions with step-by-step logic'] },
+      { name:'Enemy Design', tasks:['Normal Monster — patrol pattern, detect range, attack','Siegus Monster — passive trigger conditions, aggro speed','Echo Monster — sound radius, aggro logic, pathfinding','Statue Monster — proximity awaken range, timing window','Light Guardian — patrol zones, shadow detection logic','Ravager — group behavior, obstacle destruction','Level 1 Golem Boss — sleep/awaken/charge/die pattern','Goblin King — 3-phase FSM, seesaw reflect, minion spawns','Bat Queen — 3-phase: swarm / aerial pursuit / solo silence'] },
+      { name:'Puzzle Design', tasks:['L1: 2-button gate puzzle (box + player)','L1: Golem-charges-wall puzzle','L1: Boss grapple-to-head attack loop','L2: Seesaw crate-launch traversal (#2)','L2: Skull weight accumulation puzzle (#5)','L2: Goblin pressure-button launch puzzle (#4)','L2: Structure demolition path puzzles (#6, #7, #8)','L3: Bell sequence puzzle (Phase 3 belfry)','L3: Sound-based swarm-redirect platforming','L3: Bat Queen shield break via sound'] },
+      { name:'Pacing & Progression', tasks:['Map ability unlock order across all 3 levels','Define safe zone and checkpoint placement','Define tension/relief rhythm per level','Balance optional vs required content ratio'] },
+    ]
+  },
+  {
+    id:'blockout', num:'03', title:'Blockout / Greybox', subtitle:'First Playable Version',
+    groups:[
+      { name:'Level 1 Blockout', tasks:['Box out all rooms and corridors to scale','Test grappling hook reach and swing distance','Place placeholder enemies in correct positions','Test golem boss arena size and sightlines','Validate all puzzle solutions are completable'] },
+      { name:'Level 2 Blockout', tasks:['Build cavern geometry with correct verticality','Test seesaw physics and launch distances','Block out all 3 key-path wings','Test bridge and destructible structure collisions','Validate Goblin King arena sightlines and seesaw range'] },
+      { name:'Level 3 Blockout', tasks:['Vertical scale test across all 5 phases','Test bat grapple attach and ride release points','Block out bell tower structure and bat pathways','Test aerial traversal gaps and catch margins','Validate Boss Queen arena wind currents and ring geometry'] },
+      { name:'Core Feel Validation', tasks:['Player movement feel: jump, swing, land feedback','Grappling hook attach feedback and angle limits','Enemy detection cone visual debug pass','Sound radius visualization pass (Echo Monster)','Checkpoint and respawn smoke test'] },
+    ]
+  },
+  {
+    id:'art', num:'04', title:'Art Production', subtitle:'Concept, 3D, Texture, Animation',
+    groups:[
+      { name:'Concept Art', tasks:['Protagonist — idle, grapple, run silhouettes','Dog — alive (end), captured, collar prop','Level 1 Golem Boss final design','Goblin — standard, king variant, builder variant','Skeleton — standard, risen state','Standard bat + Giant Bat','Bat Queen — 3 phase visual states','Level 1 environment: stone ruins, torch sconces, locked doors','Level 2 environment: bone cavern, goblin scaffolding, seesaw rigs','Level 3 environment: cathedral, bell tower, cracked ceiling','Key props: grappling hook, seesaw, bells, skulls, pressure plates'] },
+      { name:'3D Modeling — Characters', tasks:['Protagonist: high-poly → low-poly → retopology','Golem: high-poly → low-poly → retopology','Goblin variants (standard + king + builder)','Skeleton variants','Standard Bat + Giant Bat','Bat Queen: high-poly → low-poly → retopology','Dog model (rescued state)'] },
+      { name:'3D Modeling — Environment', tasks:['Modular dungeon tile kit (Level 1)','Cavern speleothem and bone modular kit (Level 2)','Cathedral pillar and arch modular kit (Level 3)','Goblin structure props: seesaw, platforms, crates, bridges','Interactive props: levers, bells, pressure plates, keys','Destructible structure variants (breakable walls, scaffolding)'] },
+      { name:'UV Mapping & Texturing (PBR)', tasks:['Unwrap UVs — all character models','Base Color maps — all characters','Normal maps — all characters','Roughness / Metallic maps — all characters','Environment tilesets: Base Color + Normal + Roughness','Props textured (interactive objects prioritized first)'] },
+      { name:'Rigging & Animation', tasks:['Protagonist skeleton rig','Protagonist: idle, run, swing, grapple-attach, land, damage','Golem: idle, walk, charge, death','Goblin: idle, patrol, attack, flinch, taunt (king)','Skeleton: idle, rise, attack, collapse','Standard Bat: fly loop, dive, scatter','Giant Bat: fly, dive bomb, grab attempt, death','Bat Queen: all 3 phase animation sets + transitions'] },
+    ]
+  },
+  {
+    id:'integration', num:'05', title:'Engine Integration', subtitle:'Importing & Engine Setup',
+    groups:[
+      { name:'Asset Import Pipeline', tasks:['Set up project folder structure and naming conventions','Import all character models and verify scale','Import all environment tiles and test snap grids','Import all props and set up physics collision','Material creation and PBR shader assignment'] },
+      { name:'Physics & Collision', tasks:['Player character controller setup','Grapple raycast and attach-point detection system','Seesaw physics body and weight-based response','Destructible object breakpoint triggers','Bat grapple-attach and ride physics system','Wind current force volumes for Boss Queen arena'] },
+      { name:'Animation Integration', tasks:['Protagonist animator state machine','Enemy animator state machines — all 6 enemy types','Boss animator controllers — all 3 bosses','Blend trees for movement and speed states','Event-driven animation triggers (land impact, attack hit, stun)'] },
+    ]
+  },
+  {
+    id:'programming', num:'06', title:'Programming / Systems', subtitle:'Core Code & AI',
+    groups:[
+      { name:'Core Mechanics', tasks:['Grappling hook: fire, attach, swing, release, momentum boost','Grapple combat uses: pull enemy, push, brief stun','Stealth: sight cone detection, alert stages (unaware/suspicious/alerted)','Sound radius system: propagation, Echo Monster trigger','Shadow zone detection for Light Guardian'] },
+      { name:'Enemy AI', tasks:['Normal Monster: patrol → detect → chase → attack FSM','Siegus Monster: passive trigger on break/touch → aggro','Echo Monster: sound-reactive pathfinding and aggro','Statue Monster: proximity awaken, timing-based','Light Guardian: zone-restricted patrol, shadow safe-zone logic','Ravager: group behavior, proximity clustering, obstacle destruction'] },
+      { name:'Boss Logic', tasks:['Level 1 Golem: sleep → awaken → charge → grapple-defeat → die','Goblin King Phase 1: seesaw projectile reflect','Goblin King Phase 2: bellow stun, builder repair cycle','Goblin King Phase 3: sword shockwave','Bat Queen Phase A: swarm command + sound-shield','Bat Queen Phase B: aerial pursuit, grapple-reach requirement','Bat Queen Phase C: slow solo combat, collapse on defeat'] },
+      { name:'Level 3 Sound System', tasks:['Noise event emitter (bells, debris, drums, echo crystals)','Bat nest fright trigger and swarm redirect logic','Swarm-as-temporary-platform system','Enemy shield disruption via sound event','Hidden path reveal via sound interaction'] },
+      { name:'Game Systems', tasks:['Health system + extra life heart pieces','Checkpoint save and respawn system','Key + lock mechanic (3-key gate, Level 2)','Collectible tracking (dog items: collar, ball, hearts)','HUD: health display, grapple indicator','Pause menu and settings','Save / load system'] },
+    ]
+  },
+  {
+    id:'lighting', num:'07', title:'Lighting & Atmosphere', subtitle:'VFX, Sound, Music',
+    groups:[
+      { name:'Lighting', tasks:['Level 1: dim warm torch ambience, muted palette','Level 2: sparse blue torches, deep cavern shadow','Level 3: near-dark with bioluminescent cracks and belfry light shafts','Dynamic shadow pass — all 3 levels','Boss arena lighting drama pass (all 3 bosses)','Secret room lighting (warm pink glow for heart rooms)'] },
+      { name:'Visual FX', tasks:['Grapple hook travel VFX + hook impact spark','Dust particles on landing and wall break','Bat swarm particle system (standard + giant)','Wind current visual for Bat Queen arena','Enemy alert VFX: (!) icon and stealth detection pulse','Sound wave ring visualization (Level 3)','Collapse/destruction debris particles','Morning light shaft VFX (final Level 3 exit)'] },
+      { name:'Ambient Sound Design', tasks:['Level 1: chains, echoes, dripping water, distant groan','Level 2: bone rattle, goblin chatter, cave wind','Level 3: bat wings, bell resonance, wind gusts, whispers','Player breathing intensity layer (calm → danger)','Dog bark audio at all trigger points (Phase 3 audible from distance)','Enemy footstep audio per type','Echo Monster audio aggro cue system'] },
+      { name:'Music', tasks:['Main theme composition','Level 1 music: sparse, disorienting, piano/strings','Level 2 music: rage-driven, tribal percussion + distortion','Level 3 music: oppressive → building → emotional release','Golem Boss theme','Goblin King Boss theme (3-phase escalation)','Bat Queen Boss theme: swarm / aerial / silence phases','Bat Queen Phase C: soft, slow, melancholic arrangement','Final escape sequence: wind only, near-silence design','Dynamic layer system: calm ↔ alert ↔ combat transitions'] },
+    ]
+  },
+  {
+    id:'testing', num:'08', title:'Testing & Iteration', subtitle:'Playtesting & Bug Fixing',
+    groups:[
+      { name:'Playtesting', tasks:['Internal full playthroughs — all 3 levels','Identify stuck points or broken puzzle logic','Grapple feel pass: momentum, feedback, satisfaction','Enemy fairness review: can player always react in time?','Boss difficulty tuning — all 3 bosses','Collectible accessibility audit','External playtest session — observe new players unassisted','Review onboarding: is Level 1 tutorial clear without text?'] },
+      { name:'Bug Fixing', tasks:['Critical bugs (softlocks, crashes, out-of-bounds)','High priority (puzzle breaks, AI failures, missing audio)','Medium priority (visual glitches, animation pops, clipping)','Low priority (minor audio cut-offs, cosmetic issues)'] },
+      { name:'Balancing', tasks:['Difficulty curve validation across full 3-level run','Player death heatmap review and analysis','HP and damage number tuning','Puzzle timing windows: too tight vs too forgiving','Enemy density review per zone'] },
+    ]
+  },
+  {
+    id:'optimization', num:'09', title:'Optimization', subtitle:'Performance & Final Polish',
+    groups:[
+      { name:'Rendering', tasks:['LOD setup for all characters and environment pieces','Polygon reduction pass — background / distant assets','Occlusion culling setup','Draw call batching pass','Texture atlasing where applicable'] },
+      { name:'Lighting & VFX', tasks:['Bake static lighting for non-dynamic zones','VFX particle budget review and cap','Shadow quality settings per platform tier (high/med/low)'] },
+      { name:'Performance Targets', tasks:['Hit 60fps target on minimum spec PC','Console performance validation (if applicable)','Memory profiling — identify and fix leaks','Loading time optimization (async streaming)','Final build size reduction and compression'] },
+    ]
+  },
+];
+
+let state = {};
+function loadState(){try{const s=localStorage.getItem('log-v1');if(s)return JSON.parse(s);}catch(e){}return{};}
+function saveState(){try{localStorage.setItem('log-v1',JSON.stringify(state));}catch(e){}}
+function gk(pid,g,t){return pid+'::'+g+'::'+t;}
+function getS(pid,g,t){return state[gk(pid,g,t)]||'todo';}
+function setS(pid,g,t,s){state[gk(pid,g,t)]=s;saveState();}
+function pStats(phase){
+  if(phase.isOverview)return{done:0,inprog:0,total:0};
+  let d=0,i=0,to=0;
+  for(const g of phase.groups){
+    const ck='custom::'+phase.id+'::'+g.name;
+    const all=[...g.tasks,...(state[ck]||[])];
+    for(const t of all){to++;const s=getS(phase.id,g.name,t);if(s==='done')d++;else if(s==='inprogress')i++;}
+  }
+  return{done:d,inprog:i,total:to};
+}
+function allStats(){let d=0,i=0,t=0;for(const p of PHASES){if(p.isOverview)continue;const s=pStats(p);d+=s.done;i+=s.inprog;t+=s.total;}return{done:d,inprog:i,total:t};}
+function cycle(c){return{todo:'inprogress',inprogress:'done',done:'blocked',blocked:'todo'}[c]||'todo';}
+function icon(s){return{todo:'',inprogress:'◑',done:'✓',blocked:'✕'}[s]||'';}
+function slabel(s){return{todo:'To Do',inprogress:'In Progress',done:'Done',blocked:'Blocked'}[s]||'To Do';}
+function scls(s){return{todo:'btn-todo',inprogress:'btn-inprogress',done:'btn-done',blocked:'btn-blocked'}[s]||'btn-todo';}
+
+function renderSidebar(aid){
+  let h='<div class="sidebar-section-title">Navigation</div>';
+  for(const p of PHASES){
+    const s=p.isOverview?null:pStats(p);
+    const pct=s?(s.total?Math.round(s.done/s.total*100):0):null;
+    h+=`<button class="phase-btn ${aid===p.id?'active':''}" onclick="show('${p.id}')">
+      <span class="phase-num">${p.num}</span><span>${p.title}</span>
+      ${s?`<span class="phase-mini-progress">${pct}%</span>`:''}
+    </button>`;
+  }
+  document.getElementById('sidebar').innerHTML=h;
+}
+
+function renderOverview(){
+  const s=allStats();const pct=s.total?Math.round(s.done/s.total*100):0;
+  let h=`<div class="panel-header">
+    <div class="panel-header-left"><div class="phase-tag">★ Master View</div>
+    <div class="panel-title">Labyrinth Of Grief</div>
+    <div class="panel-subtitle">Full game development pipeline</div></div>
+    <div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--text-dim)"></div>To Do</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>In Progress</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green-bright)"></div>Done</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red-bright)"></div>Blocked</div>
+  </div>
+  <div class="overview-grid">`;
+  for(const p of PHASES){
+    if(p.isOverview)continue;
+    const ps=pStats(p);const pp=ps.total?Math.round(ps.done/ps.total*100):0;
+    h+=`<div class="overview-card" style="--fill:${pp/100}" onclick="show('${p.id}')" onmouseenter="this.querySelector('::after')" >
+      <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--amber-dim),var(--amber-bright));width:${pp}%;transition:width 0.6s"></div>
+      <div class="card-num">${p.num}</div><div class="card-title">${p.title}</div>
+      <div class="card-pct">${pp}%</div>
+      <div class="card-tasks">${ps.done}/${ps.total} tasks · ${ps.inprog} active</div>
+    </div>`;
+  }
+  return h+'</div>';
+}
+
+function renderPhase(phase){
+  const s=pStats(phase);const pct=s.total?Math.round(s.done/s.total*100):0;
+  let h=`<div class="panel-header">
+    <div class="panel-header-left"><div class="phase-tag">Phase ${phase.num}</div>
+    <div class="panel-title">${phase.title}</div>
+    <div class="panel-subtitle">${phase.subtitle}</div></div>
+    <div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">${s.done}/${s.total}</div></div>
+  </div>`;
+  for(const g of phase.groups){
+    const ck='custom::'+phase.id+'::'+g.name;
+    const all=[...g.tasks,...(state[ck]||[])];
+    const gd=all.filter(t=>getS(phase.id,g.name,t)==='done').length;
+    const gid=encodeURIComponent(g.name);
+    h+=`<div class="task-group"><div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
+    for(const t of all){
+      const ts=getS(phase.id,g.name,t);
+      const te=encodeURIComponent(t);
+      h+=`<div class="task-item ${ts}">
+        <div class="task-check" onclick="toggle('${phase.id}','${gid}','${te}')">${icon(ts)}</div>
+        <div class="task-text">${t}</div>
+        <button class="task-status-btn ${scls(ts)}" onclick="cyc('${phase.id}','${gid}','${te}')">${slabel(ts)}</button>
+      </div>`;
+    }
+    h+=`<div class="add-task-row">
+      <input class="add-task-input" type="text" placeholder="Add task to ${g.name}…" id="ni-${phase.id}-${gid}" onkeydown="if(event.key==='Enter')addT('${phase.id}','${gid}')">
+      <button class="add-task-btn" onclick="addT('${phase.id}','${gid}')">+ Add</button>
+    </div></div>`;
+  }
+  const nk='notes::'+phase.id;
+  h+=`<div class="notes-section"><div class="notes-label">Phase Notes</div>
+    <textarea class="notes-input" placeholder="Notes, blockers, decisions…" onchange="saveN('${phase.id}',this.value)">${state[nk]||''}</textarea>
+  </div>`;
+  return h;
+}
+
+let currentId='overview';
+function show(id){
+  currentId=id;
+  const mc=document.getElementById('main-content');
+  mc.innerHTML=id==='overview'?renderOverview():renderPhase(PHASES.find(p=>p.id===id));
+  renderSidebar(id);
+  updateStats();
+}
+function toggle(pid,ge,te){
+  const g=decodeURIComponent(ge),t=decodeURIComponent(te);
+  const cur=getS(pid,g,t);setS(pid,g,t,cur==='done'?'todo':'done');show(currentId);
+}
+function cyc(pid,ge,te){
+  const g=decodeURIComponent(ge),t=decodeURIComponent(te);
+  setS(pid,g,t,cycle(getS(pid,g,t)));show(currentId);
+}
+function addT(pid,ge){
+  const g=decodeURIComponent(ge);
+  const inp=document.getElementById('ni-'+pid+'-'+ge);
+  if(!inp)return;const v=inp.value.trim();if(!v)return;
+  const ck='custom::'+pid+'::'+g;
+  const c=state[ck]||[];c.push(v);state[ck]=c;saveState();show(currentId);
+}
+function saveN(pid,val){state['notes::'+pid]=val;saveState();}
+function updateStats(){
+  const s=allStats();
+  document.getElementById('stat-done').textContent=s.done;
+  document.getElementById('stat-inprog').textContent=s.inprog;
+  document.getElementById('stat-total').textContent=s.total;
+  const p=s.total?Math.round(s.done/s.total*100):0;
+  document.getElementById('global-fill').style.width=p+'%';
+  document.getElementById('global-pct').textContent=p+'%';
+}
+
+state=loadState();
+renderSidebar('overview');
+show('overview');
+</script>
+</body>
+</html>
