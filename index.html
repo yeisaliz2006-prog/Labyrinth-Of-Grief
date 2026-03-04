@@ -1,1655 +1,904 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Labyrinth Of Grief — Production Pipeline</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+
+<!-- Firebase compat SDK (works on all static hosts including GitHub Pages) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <style>
-:root{--bg:#0a0806;--surface:#120f0a;--surface2:#1a1410;--surface3:#221c15;--border:#2e2318;--red:#a01a1a;--red-bright:#e03030;--red-dim:#6b1a1a;--red-glow:rgba(180,30,30,0.12);--blocked:#8b2a1a;--blocked-bright:#d44a2a;--green:#2a5c2a;--green-bright:#4a9c4a;--blue:#1a3a6b;--blue-bright:#4a7cc7;--text:#d4c4a0;--text-dim:#7a6a50;--text-bright:#f0e0c0}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:16px;min-height:100vh;overflow-x:hidden}
-header{background:linear-gradient(180deg,#0d0a06,var(--surface));border-bottom:1px solid var(--border);padding:0 2rem;position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 32px rgba(0,0,0,.6)}
-.logo{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;color:var(--red-bright);letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:.75rem}
-.logo-icon{width:24px;height:24px;background:var(--red);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:torchflicker 3s ease-in-out infinite}
-@keyframes torchflicker{0%,100%{opacity:1;transform:scale(1)}25%{opacity:.8;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}75%{opacity:.9;transform:scale(.98)}}
-.header-right{display:flex;align-items:center;gap:1.5rem}
-.header-stats{display:flex;gap:2rem;align-items:center}
-.stat-item{text-align:center}
-.stat-num{font-family:'Cinzel',serif;font-size:1.4rem;font-weight:600;color:var(--red-bright);display:block;line-height:1}
-.stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.stat-divider{width:1px;height:32px;background:var(--border)}
-.sync-badge{display:flex;align-items:center;gap:.4rem;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);padding:.3rem .7rem;border:1px solid var(--border);border-radius:2px;transition:border-color .3s}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .3s}
-.sync-badge.syncing .sync-dot{background:var(--red-bright);animation:blink .7s infinite}
-.sync-badge.synced .sync-dot,.sync-badge.live .sync-dot{background:var(--green-bright)}
-.sync-badge.live .sync-dot{animation:blink 2s infinite}
-.sync-badge.live{border-color:rgba(74,156,74,.35)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.progress-bar-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
-.progress-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;min-width:120px}
-.progress-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));border-radius:3px;transition:width .5s ease;box-shadow:0 0 8px var(--red)}
-.progress-pct{font-family:'Cinzel',serif;font-size:.85rem;color:var(--red-bright);min-width:40px;text-align:right}
-.collab-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.35rem 2rem;display:flex;align-items:center;gap:.75rem}
-.collab-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
-.collab-avatars{display:flex;gap:.3rem}
-.collab-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-family:'Cinzel',serif;border:1px solid;cursor:default;transition:transform .15s}
-.collab-avatar:hover{transform:scale(1.2)}
-.last-sync{margin-left:auto;font-size:.68rem;color:var(--text-dim);font-style:italic}
-.container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 118px);overflow:hidden}
-.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--surface)}
-.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.sidebar-section-title{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;padding:1.2rem 1.2rem .5rem;border-top:1px solid var(--border)}
-.sidebar-section-title:first-child{border-top:none}
-.phase-btn{display:flex;align-items:center;gap:.75rem;padding:.65rem 1.2rem;cursor:pointer;transition:all .15s;border-left:3px solid transparent;width:100%;background:none;border-right:none;border-top:none;border-bottom:none;text-align:left;color:var(--text);font-family:'Crimson Pro',serif;font-size:.95rem}
-.phase-btn:hover{background:var(--red-glow);color:var(--text-bright)}
-.phase-btn.active{background:var(--red-glow);border-left-color:var(--red);color:var(--red-bright)}
-.phase-num{font-family:'Cinzel',serif;font-size:.7rem;color:var(--red-dim);min-width:20px}
-.phase-btn.active .phase-num{color:var(--red)}
-.phase-mini-progress{margin-left:auto;font-size:.7rem;color:var(--text-dim)}
-.phase-btn.active .phase-mini-progress{color:var(--red)}
-.main-content{overflow-y:auto;padding:2rem;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--bg)}
-.main-content::-webkit-scrollbar{width:4px}.main-content::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.panel-header{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
-.panel-header-left{flex:1}
-.phase-tag{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.4rem}
-.panel-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:600;color:var(--text-bright);line-height:1.2;margin-bottom:.4rem}
-.panel-subtitle{font-size:1rem;color:var(--text-dim);font-style:italic}
-.phase-progress-ring{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0}
-.ring-pct{font-family:'Cinzel',serif;font-size:1.5rem;color:var(--red-bright);line-height:1}
-.ring-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.task-group{margin-bottom:1.5rem}
-.task-group-header{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
-.group-count{color:var(--red-dim);font-size:.7rem}
-.task-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;margin-bottom:3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.task-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .15s}
-.task-item:hover{border-color:var(--red-dim);background:var(--surface2)}
-.task-item:hover::before{background:var(--red-dim)}
-.task-item.done::before{background:var(--green-bright)}
-.task-item.done{opacity:.6}
-.task-item.inprogress::before{background:var(--red);box-shadow:0 0 6px rgba(160,26,26,.5)}
-.task-item.review::before{background:var(--blue-bright)}
-.task-item.blocked::before{background:var(--blocked-bright)}
-.task-check{width:18px;height:18px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.75rem;transition:all .15s;cursor:pointer}
-.task-item.done .task-check{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.task-item.inprogress .task-check{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.task-item.review .task-check{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.task-item.blocked .task-check{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.task-text{flex:1;font-size:.95rem;color:var(--text);line-height:1.3}
-.task-item.done .task-text{text-decoration:line-through;color:var(--text-dim)}
-.task-meta-pills{display:flex;gap:.35rem;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:180px}
-.task-pill{font-size:.58rem;padding:2px 6px;border-radius:2px;border:1px solid;font-family:'Cinzel',serif;letter-spacing:.04em;white-space:nowrap}
-.pill-assign{border-color:rgba(74,124,199,.45);color:#6a9cd9;background:rgba(26,58,107,.3)}
-.pill-time{border-color:rgba(74,156,74,.45);color:#80c880;background:rgba(42,92,42,.2)}
-.task-status-btn{font-size:.65rem;padding:2px 8px;border-radius:2px;border:1px solid;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;background:none;transition:all .15s;white-space:nowrap}
-.btn-todo{border-color:var(--text-dim);color:var(--text-dim)}.btn-todo:hover{border-color:var(--red-dim);color:var(--red-dim)}
-.btn-inprogress{border-color:var(--red);color:var(--red)}
-.btn-review{border-color:var(--blue-bright);color:var(--blue-bright)}
-.btn-done{border-color:var(--green-bright);color:var(--green-bright)}
-.btn-blocked{border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.add-task-row{display:flex;gap:.5rem;margin-top:.75rem;margin-bottom:.5rem}
-.add-task-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.9rem;border-radius:3px;outline:none;transition:border-color .15s}
-.add-task-input:focus{border-color:var(--red-dim)}
-.add-task-input::placeholder{color:var(--text-dim);font-style:italic}
-.add-task-btn-sm{background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;cursor:pointer;transition:all .15s}
-.add-task-btn-sm:hover{background:var(--red);color:var(--bg)}
-.notes-section{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
-.notes-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.5rem}
-.notes-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.75rem;font-family:'Crimson Pro',serif;font-size:.95rem;line-height:1.6;font-style:italic;resize:vertical;min-height:90px;border-radius:3px;outline:none}
-.notes-input:focus{border-color:var(--red-dim)}
-.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.overview-card{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.overview-card:hover{border-color:var(--red-dim);background:var(--surface2)}
-.card-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));transition:width .6s ease}
-.card-num{font-family:'Cinzel',serif;font-size:.65rem;color:var(--red-dim);letter-spacing:.1em;margin-bottom:.3rem}
-.card-title{font-family:'Cinzel',serif;font-size:.9rem;font-weight:600;color:var(--text-bright);margin-bottom:.4rem;line-height:1.3}
-.card-pct{font-size:1.8rem;font-family:'Cinzel',serif;color:var(--red-bright);line-height:1;margin-bottom:.2rem}
-.card-tasks{font-size:.8rem;color:var(--text-dim)}
-.legend{display:flex;gap:1.5rem;margin-bottom:1rem;flex-wrap:wrap}
-.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim)}
-.legend-dot{width:8px;height:8px;border-radius:50%}
-/* DRAWER */
-.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
-.drawer-overlay.open{opacity:1;pointer-events:all}
-.drawer{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);z-index:301;transform:translateX(105%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
-.drawer::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);pointer-events:none}
-.drawer.open{transform:translateX(0)}
-.drawer-header{padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--surface2),var(--surface));position:sticky;top:0;z-index:1}
-.drawer-phase-tag{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.35rem}
-.drawer-task-name{font-family:'Cinzel',serif;font-size:.95rem;color:var(--text-bright);line-height:1.45;margin-bottom:1rem;padding-right:2rem}
-.drawer-status-row{display:flex;gap:.4rem;flex-wrap:wrap}
-.status-chip{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .65rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;color:var(--text-dim);user-select:none}
-.chip-todo.sel{background:rgba(122,106,80,.2);border-color:var(--text-dim);color:var(--text-bright)}
-.chip-inprogress.sel{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.chip-review.sel{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.chip-done.sel{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.chip-blocked.sel{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.status-chip:hover{border-color:var(--text-dim);color:var(--text)}
-.drawer-body{padding:1.25rem 1.5rem;flex:1;display:flex;flex-direction:column;gap:1.2rem}
-.drawer-field{display:flex;flex-direction:column;gap:.35rem}
-.drawer-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim)}
-.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.95rem;border-radius:3px;outline:none;transition:border-color .15s;width:100%}
-.di:focus{border-color:var(--red-dim)}
-.di::placeholder{color:var(--text-dim);font-style:italic}
-select.di{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.04em;cursor:pointer}
-select.di option{background:var(--surface2)}
-textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
-.drawer-footer{padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.5rem;border-top:1px solid var(--border)}
-.drawer-footer-actions{display:flex;gap:.6rem}
-.drawer-save{flex:1;padding:.65rem;background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-save:hover{background:var(--red);color:var(--bg)}
-.drawer-cancel{padding:.65rem 1rem;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-cancel:hover{border-color:var(--text-dim);color:var(--text)}
-.drawer-delete{width:100%;padding:.6rem;background:none;border:1px solid #3a1010;color:#7a3030;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;margin-top:.25rem}
-.drawer-delete:hover{background:rgba(160,26,26,.18);border-color:var(--red-bright);color:var(--red-bright);box-shadow:0 0 8px rgba(160,26,26,.2)}
-.drawer-close-btn{position:absolute;top:1rem;right:1rem;background:none;border:1px solid var(--border);color:var(--text-dim);width:26px;height:26px;border-radius:2px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:2}
-.drawer-close-btn:hover{border-color:var(--red-dim);color:var(--text)}
-.toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
-.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--red);padding:.6rem 1rem;font-size:.82rem;color:var(--text);border-radius:3px;animation:toastIn .3s ease;max-width:300px;line-height:1.4}
-.toast.fadeout{animation:toastOut .4s ease forwards}
-@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes toastOut{to{opacity:0;transform:translateY(4px)}}
+:root {
+  --bg:#0a0806; --surface:#120f0a; --surface2:#1a1410; --surface3:#221c15;
+  --border:#2e2318; --red:#a01a1a; --red-bright:#e03030; --red-dim:#6b1a1a;
+  --red-glow:rgba(180,30,30,0.12);
+  --green:#2a5c2a; --green-bright:#4a9c4a;
+  --blue:#1a3a6b; --blue-bright:#4a7cc7;
+  --amber:#8b5a00; --amber-bright:#d4900a;
+  --text:#d4c4a0; --text-dim:#7a6a50; --text-bright:#f0e0c0;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--text); font-family:'Crimson Pro',Georgia,serif; font-size:16px; min-height:100vh; overflow-x:hidden; }
+
+/* ── HEADER ── */
+header { background:linear-gradient(180deg,#0d0a06,var(--surface)); border-bottom:1px solid var(--border); padding:0 2rem; position:sticky; top:0; z-index:200; display:flex; align-items:center; justify-content:space-between; height:60px; box-shadow:0 4px 32px rgba(0,0,0,.7); }
+.logo { font-family:'Cinzel',serif; font-size:1rem; font-weight:900; color:var(--red-bright); letter-spacing:.18em; text-transform:uppercase; display:flex; align-items:center; gap:.6rem; }
+.logo-star { color:var(--red-bright); font-size:1.1rem; animation:pulse 3s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.header-right { display:flex; align-items:center; gap:1.5rem; }
+.hstats { display:flex; gap:1.5rem; align-items:center; }
+.hstat { text-align:center; }
+.hstat-n { font-family:'Cinzel',serif; font-size:1.3rem; font-weight:600; color:var(--red-bright); display:block; line-height:1; }
+.hstat-l { font-size:.65rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.1em; }
+.hdiv { width:1px; height:28px; background:var(--border); }
+.sync { display:flex; align-items:center; gap:.35rem; font-family:'Cinzel',serif; font-size:.58rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); padding:.28rem .65rem; border:1px solid var(--border); border-radius:2px; }
+.sync-dot { width:5px; height:5px; border-radius:50%; background:var(--text-dim); }
+.sync.connecting .sync-dot { background:var(--amber-bright); animation:blink .8s infinite; }
+.sync.live .sync-dot { background:var(--green-bright); animation:blink 2s infinite; }
+.sync.live { border-color:rgba(74,156,74,.3); }
+.sync.offline .sync-dot { background:var(--red-bright); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ── PROGRESS BAR ── */
+.prog-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:.5rem 2rem; display:flex; align-items:center; gap:1rem; }
+.prog-label { font-family:'Cinzel',serif; font-size:.62rem; letter-spacing:.12em; color:var(--text-dim); text-transform:uppercase; white-space:nowrap; min-width:110px; }
+.prog-track { flex:1; height:5px; background:var(--surface3); border-radius:3px; overflow:hidden; }
+.prog-fill { height:100%; background:linear-gradient(90deg,var(--red-dim),var(--red-bright)); border-radius:3px; transition:width .6s ease; }
+.prog-pct { font-family:'Cinzel',serif; font-size:.82rem; color:var(--red-bright); min-width:36px; text-align:right; }
+
+/* ── COLLAB BAR ── */
+.collab-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:.3rem 2rem; display:flex; align-items:center; gap:.6rem; min-height:30px; }
+.collab-lbl { font-family:'Cinzel',serif; font-size:.56rem; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); }
+.collab-avatars { display:flex; gap:.25rem; }
+.avatar { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.55rem; font-family:'Cinzel',serif; border:1px solid; }
+.last-sync { margin-left:auto; font-size:.65rem; color:var(--text-dim); font-style:italic; }
+
+/* ── LAYOUT ── */
+.layout { display:grid; grid-template-columns:250px 1fr; height:calc(100vh - 104px); overflow:hidden; }
+.sidebar { background:var(--surface); border-right:1px solid var(--border); overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--red-dim) transparent; }
+.sidebar::-webkit-scrollbar { width:3px; }
+.sidebar::-webkit-scrollbar-thumb { background:var(--red-dim); }
+.sidebar-hd { font-family:'Cinzel',serif; font-size:.6rem; letter-spacing:.16em; color:var(--text-dim); text-transform:uppercase; padding:1rem 1.1rem .4rem; }
+.nav-btn { display:flex; align-items:center; gap:.6rem; padding:.6rem 1.1rem; cursor:pointer; border-left:3px solid transparent; width:100%; background:none; border-right:none; border-top:none; border-bottom:none; text-align:left; color:var(--text); font-family:'Crimson Pro',serif; font-size:.92rem; transition:all .12s; }
+.nav-btn:hover { background:var(--red-glow); color:var(--text-bright); }
+.nav-btn.active { background:var(--red-glow); border-left-color:var(--red); color:var(--red-bright); }
+.nav-num { font-family:'Cinzel',serif; font-size:.65rem; color:var(--red-dim); min-width:18px; }
+.nav-btn.active .nav-num { color:var(--red); }
+.nav-pct { margin-left:auto; font-size:.68rem; color:var(--text-dim); }
+.nav-btn.active .nav-pct { color:var(--red); }
+
+.main { overflow-y:auto; padding:1.75rem 2rem; scrollbar-width:thin; scrollbar-color:var(--red-dim) transparent; }
+.main::-webkit-scrollbar { width:3px; }
+.main::-webkit-scrollbar-thumb { background:var(--red-dim); }
+
+/* ── PANEL HEADER ── */
+.ph { margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
+.ph-left { flex:1; }
+.ph-tag { font-family:'Cinzel',serif; font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--red-dim); margin-bottom:.3rem; }
+.ph-title { font-family:'Cinzel',serif; font-size:1.5rem; font-weight:600; color:var(--text-bright); margin-bottom:.25rem; }
+.ph-sub { font-size:.95rem; color:var(--text-dim); font-style:italic; }
+.ph-ring { text-align:center; flex-shrink:0; }
+.ph-ring-n { font-family:'Cinzel',serif; font-size:1.4rem; color:var(--red-bright); line-height:1; }
+.ph-ring-l { font-size:.6rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.08em; }
+
+/* ── OVERVIEW ── */
+.ov-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.85rem; }
+.ov-card { background:var(--surface); border:1px solid var(--border); padding:.9rem; border-radius:3px; cursor:pointer; transition:all .12s; position:relative; overflow:hidden; }
+.ov-card:hover { border-color:var(--red-dim); background:var(--surface2); }
+.ov-bar { position:absolute; bottom:0; left:0; height:2px; background:linear-gradient(90deg,var(--red-dim),var(--red-bright)); }
+.ov-num { font-family:'Cinzel',serif; font-size:.62rem; color:var(--red-dim); letter-spacing:.1em; margin-bottom:.25rem; }
+.ov-title { font-family:'Cinzel',serif; font-size:.85rem; color:var(--text-bright); margin-bottom:.35rem; line-height:1.3; }
+.ov-pct { font-size:1.7rem; font-family:'Cinzel',serif; color:var(--red-bright); line-height:1; margin-bottom:.15rem; }
+.ov-sub { font-size:.75rem; color:var(--text-dim); }
+.legend { display:flex; gap:1.2rem; margin-bottom:1rem; flex-wrap:wrap; }
+.leg-item { display:flex; align-items:center; gap:.35rem; font-size:.78rem; color:var(--text-dim); }
+.leg-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
+/* ── TASKS ── */
+.tgroup { margin-bottom:1.4rem; }
+.tgroup-hd { font-family:'Cinzel',serif; font-size:.7rem; letter-spacing:.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:.5rem; padding-bottom:.35rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:.4rem; }
+.tgroup-ct { color:var(--red-dim); font-size:.65rem; }
+.task { display:flex; align-items:center; gap:.65rem; padding:.55rem .7rem; margin-bottom:2px; background:var(--surface); border:1px solid var(--border); border-radius:3px; cursor:pointer; transition:all .12s; position:relative; }
+.task::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:3px 0 0 3px; background:var(--border); transition:background .12s; }
+.task:hover { border-color:var(--red-dim); background:var(--surface2); }
+.task:hover::before { background:var(--red-dim); }
+.task.done::before { background:var(--green-bright); }
+.task.done { opacity:.58; }
+.task.inprogress::before { background:var(--red); box-shadow:0 0 5px rgba(160,26,26,.45); }
+.task.review::before { background:var(--blue-bright); }
+.task.blocked::before { background:#d44a2a; }
+.task-chk { width:17px; height:17px; border:1px solid var(--border); border-radius:2px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:.7rem; flex-shrink:0; cursor:pointer; transition:all .12s; }
+.task.done    .task-chk { background:var(--green); border-color:var(--green-bright); color:var(--green-bright); }
+.task.inprogress .task-chk { background:var(--red-dim); border-color:var(--red); color:var(--red-bright); }
+.task.review  .task-chk { background:var(--blue); border-color:var(--blue-bright); color:var(--blue-bright); }
+.task.blocked .task-chk { background:#5a1a0a; border-color:#d44a2a; color:#d44a2a; }
+.task-name { flex:1; font-size:.92rem; color:var(--text); line-height:1.3; }
+.task.done .task-name { text-decoration:line-through; color:var(--text-dim); }
+.task-pills { display:flex; gap:.3rem; align-items:center; flex-shrink:0; }
+.pill { font-size:.56rem; padding:1px 5px; border-radius:2px; border:1px solid; font-family:'Cinzel',serif; white-space:nowrap; }
+.pill-a { border-color:rgba(74,124,199,.5); color:#7aacdf; background:rgba(26,58,107,.25); }
+.pill-t { border-color:rgba(74,156,74,.5); color:#7acf7a; background:rgba(42,92,42,.18); }
+.task-sbtn { font-size:.6rem; padding:2px 7px; border-radius:2px; border:1px solid; cursor:pointer; font-family:'Cinzel',serif; letter-spacing:.05em; text-transform:uppercase; background:none; transition:all .12s; white-space:nowrap; flex-shrink:0; }
+.sbtn-todo     { border-color:var(--text-dim); color:var(--text-dim); }
+.sbtn-inprogress { border-color:var(--red); color:var(--red); }
+.sbtn-review   { border-color:var(--blue-bright); color:var(--blue-bright); }
+.sbtn-done     { border-color:var(--green-bright); color:var(--green-bright); }
+.sbtn-blocked  { border-color:#d44a2a; color:#d44a2a; }
+
+/* ── ADD TASK ROW ── */
+.add-row { display:flex; gap:.4rem; margin-top:.65rem; }
+.add-inp { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:.42rem .65rem; font-family:'Crimson Pro',serif; font-size:.88rem; border-radius:3px; outline:none; }
+.add-inp:focus { border-color:var(--red-dim); }
+.add-inp::placeholder { color:var(--text-dim); font-style:italic; }
+.add-btn { background:var(--red-dim); border:1px solid var(--red); color:var(--red-bright); padding:.42rem .85rem; font-family:'Cinzel',serif; font-size:.65rem; letter-spacing:.1em; text-transform:uppercase; border-radius:3px; cursor:pointer; }
+.add-btn:hover { background:var(--red); color:var(--bg); }
+
+/* ── PHASE NOTES ── */
+.notes-sec { margin-top:1.5rem; padding-top:1.2rem; border-top:1px solid var(--border); }
+.notes-lbl { font-family:'Cinzel',serif; font-size:.65rem; letter-spacing:.12em; color:var(--text-dim); text-transform:uppercase; margin-bottom:.4rem; }
+.notes-ta { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:.65rem; font-family:'Crimson Pro',serif; font-size:.92rem; line-height:1.6; font-style:italic; resize:vertical; min-height:80px; border-radius:3px; outline:none; }
+.notes-ta:focus { border-color:var(--red-dim); }
+
+/* ── DRAWER ── */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:300; opacity:0; pointer-events:none; transition:opacity .2s; }
+.overlay.open { opacity:1; pointer-events:all; }
+.drawer { position:fixed; right:0; top:0; bottom:0; width:380px; max-width:96vw; background:var(--surface); border-left:1px solid var(--border); z-index:301; transform:translateX(110%); transition:transform .26s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; }
+.drawer::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--red),transparent); pointer-events:none; }
+.drawer.open { transform:translateX(0); }
+.drawer-hd { padding:1.3rem 1.4rem .9rem; border-bottom:1px solid var(--border); background:linear-gradient(180deg,var(--surface2),var(--surface)); position:relative; flex-shrink:0; }
+.drawer-close { position:absolute; top:.9rem; right:.9rem; background:none; border:1px solid var(--border); color:var(--text-dim); width:24px; height:24px; border-radius:2px; cursor:pointer; font-size:.7rem; display:flex; align-items:center; justify-content:center; }
+.drawer-close:hover { border-color:var(--red-dim); color:var(--text); }
+.drawer-tag { font-family:'Cinzel',serif; font-size:.56rem; letter-spacing:.18em; text-transform:uppercase; color:var(--red-dim); margin-bottom:.3rem; }
+.drawer-taskname { font-family:'Cinzel',serif; font-size:.92rem; color:var(--text-bright); line-height:1.4; margin-bottom:.85rem; padding-right:2rem; }
+.status-row { display:flex; gap:.35rem; flex-wrap:wrap; }
+.schip { font-family:'Cinzel',serif; font-size:.55rem; letter-spacing:.1em; text-transform:uppercase; padding:.24rem .6rem; border:1px solid var(--border); border-radius:2px; cursor:pointer; color:var(--text-dim); user-select:none; transition:all .12s; }
+.schip:hover { border-color:var(--text-dim); color:var(--text); }
+.schip-todo.sel      { background:rgba(122,106,80,.2); border-color:var(--text-dim); color:var(--text-bright); }
+.schip-inprogress.sel { background:var(--red-dim); border-color:var(--red); color:var(--red-bright); }
+.schip-review.sel    { background:var(--blue); border-color:var(--blue-bright); color:var(--blue-bright); }
+.schip-done.sel      { background:var(--green); border-color:var(--green-bright); color:var(--green-bright); }
+.schip-blocked.sel   { background:#5a1a0a; border-color:#d44a2a; color:#d44a2a; }
+
+.drawer-body { padding:1.1rem 1.4rem; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:1rem; }
+.dfield { display:flex; flex-direction:column; gap:.3rem; }
+.dlabel { font-family:'Cinzel',serif; font-size:.58rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); }
+.dinput { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:.45rem .65rem; font-family:'Crimson Pro',serif; font-size:.92rem; border-radius:3px; outline:none; width:100%; }
+.dinput:focus { border-color:var(--red-dim); }
+.dinput::placeholder { color:var(--text-dim); font-style:italic; }
+select.dinput { font-family:'Cinzel',serif; font-size:.72rem; cursor:pointer; }
+select.dinput option { background:var(--surface2); }
+textarea.dinput { resize:vertical; min-height:85px; line-height:1.55; font-style:italic; }
+
+.drawer-ft { padding:.9rem 1.4rem 1.3rem; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:.45rem; flex-shrink:0; }
+.ft-row { display:flex; gap:.5rem; }
+.btn-save { flex:1; padding:.6rem; background:var(--red-dim); border:1px solid var(--red); color:var(--red-bright); font-family:'Cinzel',serif; font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; cursor:pointer; border-radius:3px; }
+.btn-save:hover { background:var(--red); color:var(--bg); }
+.btn-cancel { padding:.6rem .9rem; background:none; border:1px solid var(--border); color:var(--text-dim); font-family:'Cinzel',serif; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; border-radius:3px; }
+.btn-cancel:hover { border-color:var(--text-dim); color:var(--text); }
+.btn-delete { width:100%; padding:.55rem; background:none; border:1px solid #2e1010; color:#6a2828; font-family:'Cinzel',serif; font-size:.64rem; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; border-radius:3px; transition:all .18s; }
+.btn-delete:hover { background:rgba(160,26,26,.15); border-color:var(--red-bright); color:var(--red-bright); }
+
+/* ── TOASTS ── */
+.toasts { position:fixed; bottom:1.2rem; right:1.2rem; z-index:500; display:flex; flex-direction:column; gap:.4rem; pointer-events:none; }
+.toast { background:var(--surface2); border:1px solid var(--border); border-left:3px solid var(--red); padding:.55rem .9rem; font-size:.8rem; color:var(--text); border-radius:3px; animation:tin .25s ease; max-width:280px; }
+.toast.out { animation:tout .35s ease forwards; }
+@keyframes tin  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+@keyframes tout { to{opacity:0;transform:translateY(4px)} }
 </style>
 </head>
 <body>
 
 <header>
-<div class="logo"><div class="logo-icon"></div>Labyrinth Of Grief</div>
-<div class="header-right">
-<div class="header-stats">
-<div class="stat-item"><span class="stat-num" id="stat-done">0</span><span class="stat-label">Complete</span></div>
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-inprog">0</span><span class="stat-label">In Progress</span></div>
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Total Tasks</span></div>
-</div>
-<div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</span></div>
-</div>
-</header>
-<div class="progress-bar-wrap">
-<span class="progress-label">Overall Progress</span>
-<div class="progress-track"><div class="progress-fill" id="global-fill" style="width:0%"></div></div>
-<span class="progress-pct" id="global-pct">0%</span>
-</div>
-<div class="collab-bar">
-<span class="collab-label">Online</span>
-<div class="collab-avatars" id="collabAvatars"></div>
-<span class="last-sync" id="lastSync">&#8212;</span>
-</div>
-<div class="container">
-<nav class="sidebar" id="sidebar"></nav>
-<div class="main-content" id="main-content"></div>
-</div>
-
-<!-- DRAWER -->
-
-<div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
-<div class="drawer" id="drawer">
-<button class="drawer-close-btn" onclick="APP.closeDrawer()">&#x2715;</button>
-<div class="drawer-header">
-<div class="drawer-phase-tag" id="dPhaseTag"></div>
-<div class="drawer-task-name" id="dTaskNameDisplay"></div>
-<div class="drawer-status-row" id="dStatusRow"></div>
-</div>
-<div class="drawer-body">
-<div class="drawer-field">
-<label class="drawer-label">&#x270E; Task Name</label>
-<input class="di" id="dTaskName" placeholder="Task name&#8230;" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x2694; Assignee</label>
-<input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x25F7; Estimated Timeframe</label>
-<select class="di" id="dTimeframe">
-<option value="">&#8212; Select estimate &#8212;</option>
-<option value="1-2h">1&#8211;2 hours</option>
-<option value="half-day">Half day</option>
-<option value="1d">1 day</option>
-<option value="2-3d">2&#8211;3 days</option>
-<option value="1w">~1 week</option>
-<option value="2w">~2 weeks</option>
-<option value="1m">~1 month</option>
-<option value="ongoing">Ongoing</option>
-</select>
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x2726; Notes &amp; Details</label>
-<textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links&#8230;"></textarea>
-</div>
-</div>
-<div class="drawer-footer">
-<div class="drawer-footer-actions">
-<button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
-<button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
-</div>
-<button class="drawer-delete" onclick="APP.deleteTask()"><span style="color:var(--red-bright)">&#x1F5D1; Permanently Delete</span></button>
-</div>
-</div>
-<div class="toast-container" id="toastContainer"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-const firebaseConfig = {
-apiKey: "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
-authDomain: "labyrinth-of-grief-6a2e2.firebaseapp.com",
-databaseURL: "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
-projectId: "labyrinth-of-grief-6a2e2",
-storageBucket: "labyrinth-of-grief-6a2e2.firebasestorage.app",
-messagingSenderId: "148640942330",
-appId: "1:148640942330:web:8f091f07193cd434bba143"
-};
-
-// ─── PHASES ──────────────────────────────────────────────────────────────────
-const PHASES = [
-{ id:'overview', num:'&#x2605;', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
-
-{ id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
-{ name:'Concept & Vision', tasks:[
-'Game Title and Tagline',
-'One-Page Concept Document',
-'Target Platform',
-'Emotional Arc',
-'Core Narrative Premise',
-]},
-{ name:'Level Concepts', tasks:[
-'Level 1 Concept',
-'Level 2 Concept',
-'Level 3 Concept',
-'Intermission Scene Concept',
-'Emotional Transition Beats',
-]},
-{ name:'References & Moodboards', tasks:[
-'Level 1 Moodboard',
-'Level 2 Moodboard',
-'Level 3 Moodboard',
-'Player Movement References',
-'Level Design References',
-]},
-{ name:'Narrative Design', tasks:[
-'Amnesia Arc Structure',
-'Dog Rescue Payoff Moments',
-'Village NPC Design',
-'Boss Lore Content',
-'Ending Sequence Script',
-]},
-]},
-
-{ id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design', groups:[
-{ name:'Level Design Documents', tasks:[
-'Level 1 Design Document',
-'Level 2 Design Document',
-'Level 3 Design Document',
-'Secrets and Collectibles Map',
-'Puzzle Solutions Document',
-]},
-{ name:'Enemy Design', tasks:[
-'Standard Enemy',
-'Siege Enemy',
-'Echo Enemy',
-'Statue Enemy',
-'Light Guardian',
-'Ravager',
-'Level 1 Boss',
-'Level 2 Boss',
-'Level 3 Boss',
-]},
-{ name:'Puzzle Design', tasks:[
-'Level 1 Gate Puzzle',
-'Level 1 Wall Charge Puzzle',
-'Level 1 Boss Grapple Puzzle',
-'Level 2 Seesaw Launch Puzzle',
-'Level 2 Skull Weight Puzzle',
-'Level 2 Pressure Button Puzzle',
-'Level 2 Demolition Path Puzzles',
-'Level 3 Bell Sequence Puzzle',
-'Level 3 Swarm Redirect Puzzle',
-'Level 3 Boss Shield Puzzle',
-]},
-{ name:'Pacing & Progression', tasks:[
-'Ability Unlock Order',
-'Checkpoint Placement',
-'Tension and Relief Rhythm',
-'Optional vs Required Content Balance',
-]},
-]},
-
-{ id:'blockout', num:'03', title:'Blockout / Greybox', subtitle:'First Playable Version', groups:[
-{ name:'Level 1 Blockout', tasks:[
-'Level 1 Room Layout',
-'Level 1 Grapple Range Test',
-'Level 1 Enemy Placement',
-'Level 1 Boss Arena Test',
-'Level 1 Puzzle Validation',
-]},
-{ name:'Level 2 Blockout', tasks:[
-'Level 2 Cavern Geometry',
-'Level 2 Seesaw Physics Test',
-'Level 2 Key-Path Routes',
-'Level 2 Destructible Collision Test',
-'Level 2 Boss Arena Validation',
-]},
-{ name:'Level 3 Blockout', tasks:[
-'Level 3 Vertical Scale Test',
-'Level 3 Bat Grapple Points',
-'Level 3 Bell Tower Layout',
-'Level 3 Aerial Gap Test',
-'Level 3 Boss Arena Validation',
-]},
-{ name:'Core Feel Validation', tasks:[
-'Player Movement Feel',
-'Grapple Hook Feel',
-'Enemy Detection Debug',
-'Sound Radius Visualisation',
-'Checkpoint and Respawn Test',
-]},
-]},
-
-{ id:'art', num:'04', title:'Art Production', subtitle:'Concept, 3D, Texture, Animation', groups:[
-{ name:'Concept Art', tasks:[
-'Protagonist Concept',
-'Companion Dog Concept',
-'Level 1 Boss Concept',
-'Goblin Concepts',
-'Skeleton Enemy Concept',
-'Bat Enemy Concepts',
-'Level 3 Boss Concept',
-'Level 1 Environment Concept',
-'Level 2 Environment Concept',
-'Level 3 Environment Concept',
-'Key Props Concept',
-]},
-{ name:'3D Modeling - Characters', tasks:[
-'Protagonist Model',
-'Level 1 Boss Model',
-'Goblin Models',
-'Skeleton Enemy Model',
-'Bat Enemy Models',
-'Level 3 Boss Model',
-'Companion Dog Model',
-]},
-{ name:'3D Modeling - Environment', tasks:[
-'Level 1 Modular Tile Kit',
-'Level 2 Modular Tile Kit',
-'Level 3 Modular Tile Kit',
-'Goblin Structure Props',
-'Interactive Props',
-'Destructible Structure Variants',
-]},
-{ name:'UV Mapping & Texturing', tasks:[
-'Character UV Unwrap',
-'Character Base Color Maps',
-'Character Normal Maps',
-'Character Roughness and Metallic Maps',
-'Environment Tileset Textures',
-'Props Textures',
-]},
-{ name:'Rigging & Animation', tasks:[
-'Protagonist Rig',
-'Protagonist Animations',
-'Level 1 Boss Animations',
-'Goblin Animations',
-'Skeleton Animations',
-'Standard Bat Animations',
-'Giant Bat Animations',
-'Level 3 Boss Animations',
-]},
-]},
-
-{ id:'integration', num:'05', title:'Engine Integration', subtitle:'Importing & Engine Setup', groups:[
-{ name:'Asset Import Pipeline', tasks:[
-'Project Folder Structure',
-'Character Import and Scale Check',
-'Environment Tile Import',
-'Props Import and Collision',
-'PBR Material Setup',
-]},
-{ name:'Physics & Collision', tasks:[
-'Player Controller',
-'Grapple System',
-'Seesaw Physics',
-'Destructible Breakpoints',
-'Bat Ride Physics',
-'Level 3 Wind Volumes',
-]},
-{ name:'Animation Integration', tasks:[
-'Protagonist Animator',
-'Enemy Animators',
-'Boss Animators',
-'Movement Blend Trees',
-'Animation Event Triggers',
-]},
-]},
-
-{ id:'programming', num:'06', title:'Programming / Systems', subtitle:'Core Code & AI', groups:[
-{ name:'Core Mechanics', tasks:[
-'Grappling Hook System',
-'Grapple Combat Interactions',
-'Stealth System',
-'Sound Radius System',
-'Shadow Detection System',
-]},
-{ name:'Enemy AI', tasks:[
-'Standard Enemy AI',
-'Siege Enemy AI',
-'Echo Enemy AI',
-'Statue Enemy AI',
-'Light Guardian AI',
-'Ravager AI',
-]},
-{ name:'Boss Logic', tasks:[
-'Level 1 Boss AI',
-'Level 2 Boss Phase 1',
-'Level 2 Boss Phase 2',
-'Level 2 Boss Phase 3',
-'Level 3 Boss Phase 1',
-'Level 3 Boss Phase 2',
-'Level 3 Boss Phase 3',
-]},
-{ name:'Level 3 Sound System', tasks:[
-'Noise Event Emitter',
-'Bat Swarm Trigger',
-'Swarm Platform System',
-'Enemy Shield Disruption',
-'Hidden Path Reveal',
-]},
-{ name:'Game Systems', tasks:[
-'Health System',
-'Checkpoint System',
-'Key and Lock System',
-'Collectibles Tracker',
-'HUD',
-'Pause Menu and Settings',
-'Save and Load System',
-]},
-]},
-
-{ id:'lighting', num:'07', title:'Lighting & Atmosphere', subtitle:'VFX, Sound, Music', groups:[
-{ name:'Lighting', tasks:[
-'Level 1 Lighting',
-'Level 2 Lighting',
-'Level 3 Lighting',
-'Dynamic Shadow Pass',
-'Boss Arena Lighting',
-'Secret Room Lighting',
-]},
-{ name:'Visual FX', tasks:[
-'Grapple VFX',
-'Impact Particles',
-'Bat Swarm Particles',
-'Wind VFX',
-'Enemy Alert VFX',
-'Sound Wave VFX',
-'Destruction Particles',
-'Ending Light Shaft VFX',
-]},
-{ name:'Ambient Sound Design', tasks:[
-'Level 1 Ambient Audio',
-'Level 2 Ambient Audio',
-'Level 3 Ambient Audio',
-'Player Breathing Layer',
-'Companion Dog Audio',
-'Enemy Footsteps',
-'Echo Enemy Audio',
-]},
-{ name:'Music', tasks:[
-'Main Theme',
-'Level 1 Music',
-'Level 2 Music',
-'Level 3 Music',
-'Level 1 Boss Theme',
-'Level 2 Boss Theme',
-'Level 3 Boss Theme',
-'Level 3 Boss Final Phase Theme',
-'Ending Sequence Music',
-'Dynamic Music System',
-]},
-]},
-
-{ id:'testing', num:'08', title:'Testing & Iteration', subtitle:'Playtesting & Bug Fixing', groups:[
-{ name:'Playtesting', tasks:[
-'Internal Full Playthrough',
-'Puzzle Logic Review',
-'Movement Feel Pass',
-'Enemy Fairness Review',
-'Boss Difficulty Tuning',
-'Collectibles Accessibility Check',
-'External Playtest Session',
-'Onboarding Review',
-]},
-{ name:'Bug Fixing', tasks:[
-'Critical Bugs',
-'High Priority Bugs',
-'Medium Priority Bugs',
-'Low Priority Bugs',
-]},
-{ name:'Balancing', tasks:[
-'Difficulty Curve Validation',
-'Death Heatmap Analysis',
-'Combat Number Tuning',
-'Puzzle Timing Review',
-'Enemy Density Review',
-]},
-]},
-
-{ id:'optimization', num:'09', title:'Optimization', subtitle:'Performance & Final Polish', groups:[
-{ name:'Rendering', tasks:[
-'LOD Setup',
-'Polygon Reduction Pass',
-'Occlusion Culling Setup',
-'Draw Call Batching',
-'Texture Atlasing',
-]},
-{ name:'Lighting & VFX', tasks:[
-'Static Lightmap Bake',
-'Particle Budget Cap',
-'Shadow Quality Settings',
-]},
-{ name:'Performance Targets', tasks:[
-'PC 60fps Validation',
-'Console Performance Check',
-'Memory Profiling',
-'Load Time Optimisation',
-'Final Build Size Reduction',
-]},
-]},
-];
-
-
-// ─── STATE ────────────────────────────────────────────────────────────────────
-const SID = Math.random().toString(36).slice(2,8).toUpperCase();
-const COLORS = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4a9c','#30c8c8','#c87040','#7cc740'];
-const MY_COLOR = COLORS[Math.floor(Math.random()*COLORS.length)];
-let state={}, db, stateRef, currentId='overview', dStatus='todo', dCtx=null;
-
-const $=id=>document.getElementById(id);
-
-function badge(s,lbl){
-const b=$('syncBadge'),l=$('syncLabel');
-b.className='sync-badge '+s;
-l.textContent=lbl||{syncing:'Syncing...',synced:'Synced',live:'Live',offline:'Offline'}[s]||s;
-}
-
-function toast(msg,dur=2800){
-const c=$('toastContainer'),el=document.createElement('div');
-el.className='toast'; el.textContent=msg; c.appendChild(el);
-setTimeout(()=>{el.classList.add('fadeout');setTimeout(()=>el.remove(),400);},dur);
-}
-
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
-function initFirebase(){
-try{
-const app=initializeApp(firebaseConfig);
-db=getDatabase(app);
-stateRef=ref(db,'pipeline/state');
-badge('syncing');
-onValue(stateRef,snap=>{
-state=snap.val()||{};
-show(currentId); updateStats();
-badge('live','Live');
-$('lastSync').textContent='Live - '+new Date().toLocaleTimeString();
-});
-heartbeat();
-setInterval(heartbeat,15000);
-setInterval(cleanPresence,30000);
-toast('Connected - You are '+SID);
-}catch(e){
-console.error(e); badge('offline'); toast('Firebase error - check console');
-}
-}
-
-async function persist(patch){
-Object.assign(state,patch);
-if(!db){show(currentId);updateStats();return;}
-try{badge('syncing');await update(stateRef,patch);}
-catch(e){badge('offline');toast('Save failed');}
-}
-
-async function heartbeat(){
-if(!db)return;
-try{
-await set(ref(db,'pipeline/presence/'+SID),{id:SID,color:MY_COLOR,ts:Date.now()});
-const snap=await get(ref(db,'pipeline/presence'));
-const all=snap.val()||{};
-const active=Object.values(all).filter(u=>Date.now()-u.ts<45000);
-const el=$('collabAvatars');
-if(el) el.innerHTML=active.map(u=>`<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`).join('');
-if(active.length>1) badge('live',active.length+' Online');
-}catch(e){}
-}
-
-async function cleanPresence(){
-if(!db)return;
-try{
-const snap=await get(ref(db,'pipeline/presence'));
-const all=snap.val()||{},updates={};
-for(const[k,v] of Object.entries(all)) if(Date.now()-v.ts>60000) updates['pipeline/presence/'+k]=null;
-if(Object.keys(updates).length) await update(ref(db),updates);
-}catch(e){}
-}
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function fk(p,g,t){return p+'|||'+g+'|||'+btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g,'_');}
-function getMeta(p,g,t){return state[fk(p,g,t)]||{};}
-function getS(p,g,t){return getMeta(p,g,t).status||'todo';}
-async function setMeta(p,g,t,m){const k=fk(p,g,t),patch={};patch[k]={...getMeta(p,g,t),...m};await persist(patch);}
-
-function resolvedTasks(phId,gName,rawTasks){
-const renames = state['__renames__'+phId+'__'+gName] || {};
-const deleted = state['__deleted__'+phId+'__'+gName] || {};
-// deleted is a Firebase-safe object: { encodedKey: 1, ... }
-const deletedOriginals = new Set(Object.keys(deleted));
-const deletedRenamed = new Set(Object.values(deleted).filter(v=>typeof v==='string'));
-return rawTasks
-.filter(t => !deletedOriginals.has(t)) // remove if original name is deleted
-.map(t => renames[t] || t) // apply rename
-.filter(t => !deletedRenamed.has(t)); // remove if renamed version is deleted
-}
-
-function pStats(ph){
-if(ph.isOverview)return{done:0,inprog:0,total:0};
-let d=0,i=0,to=0;
-for(const g of ph.groups){
-const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
-const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
-for(const t of all){to++;const s=getS(ph.id,g.name,t);if(s==='done')d++;else if(s==='inprogress')i++;}
-}
-return{done:d,inprog:i,total:to};
-}
-
-function allStats(){let d=0,i=0,t=0;for(const p of PHASES){if(p.isOverview)continue;const s=pStats(p);d+=s.done;i+=s.inprog;t+=s.total;}return{done:d,inprog:i,total:t};}
-function cyc(c){return{todo:'inprogress',inprogress:'review',review:'done',done:'blocked',blocked:'todo'}[c]||'todo';}
-function ico(s){return{todo:'',inprogress:'◑',review:'◐',done:'✓',blocked:'✕'}[s]||'';}
-function slbl(s){return{todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'}[s]||'To Do';}
-function scls(s){return{todo:'btn-todo',inprogress:'btn-inprogress',review:'btn-review',done:'btn-done',blocked:'btn-blocked'}[s]||'btn-todo';}
-function tflbl(v){return{'1-2h':'1-2h','half-day':'half day','1d':'1d','2-3d':'2-3d','1w':'1wk','2w':'2wk','1m':'1mo','ongoing':'ongoing'}[v]||v;}
-
-function pills(meta){
-let p='';
-if(meta.assignee) p+=`<span class="task-pill pill-assign">&#9876; ${meta.assignee}</span>`;
-if(meta.timeframe) p+=`<span class="task-pill pill-time">&#9719; ${tflbl(meta.timeframe)}</span>`;
-return p;
-}
-
-// ─── RENDER ───────────────────────────────────────────────────────────────────
-function renderSidebar(aid){
-let h='<div class="sidebar-section-title">Navigation</div>';
-for(const p of PHASES){
-const s=p.isOverview?null:pStats(p);
-const pct=s?(s.total?Math.round(s.done/s.total*100):0):null;
-h+=`<button class="phase-btn ${aid===p.id?'active':''}" onclick="APP.show('${p.id}')"><span class="phase-num">${p.num}</span><span>${p.title}</span>${s?`<span class="phase-mini-progress">${pct}%</span>`:''}</button>`;
-}
-$('sidebar').innerHTML=h;
-}
-
-function renderOverview(){
-const s=allStats(),pct=s.total?Math.round(s.done/s.total*100):0;
-let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">&#9733; Master View</div><div class="panel-title">Labyrinth Of Grief</div><div class="panel-subtitle">Full game development pipeline</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div></div><div class="legend"><div class="legend-item"><div class="legend-dot" style="background:var(--text-dim)"></div>To Do</div><div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>In Progress</div><div class="legend-item"><div class="legend-dot" style="background:var(--blue-bright)"></div>Review</div><div class="legend-item"><div class="legend-dot" style="background:var(--green-bright)"></div>Done</div><div class="legend-item"><div class="legend-dot" style="background:var(--blocked-bright)"></div>Blocked</div></div><div class="overview-grid">`;
-for(const p of PHASES){
-if(p.isOverview)continue;
-const ps=pStats(p),pp=ps.total?Math.round(ps.done/ps.total*100):0;
-h+=`<div class="overview-card" onclick="APP.show('${p.id}')"><div class="card-progress-bar" style="width:${pp}%"></div><div class="card-num">${p.num}</div><div class="card-title">${p.title}</div><div class="card-pct">${pp}%</div><div class="card-tasks">${ps.done}/${ps.total} tasks &middot; ${ps.inprog} active</div></div>`;
-}
-return h+'</div>';
-}
-
-function renderPhase(ph){
-const s=pStats(ph),pct=s.total?Math.round(s.done/s.total*100):0;
-let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">Phase ${ph.num}</div><div class="panel-title">${ph.title}</div><div class="panel-subtitle">${ph.subtitle}</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">${s.done}/${s.total}</div></div></div>`;
-for(const g of ph.groups){
-const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
-const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
-const gd=all.filter(t=>getS(ph.id,g.name,t)==='done').length;
-const ge=encodeURIComponent(g.name);
-h+=`<div class="task-group"><div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
-for(const t of all){
-const ts=getS(ph.id,g.name,t),meta=getMeta(ph.id,g.name,t),te=encodeURIComponent(t);
-h+=`<div class="task-item ${ts}" onclick="APP.openDrawer('${ph.id}','${ge}','${te}')"><div class="task-check" onclick="event.stopPropagation();APP.doToggle('${ph.id}','${ge}','${te}')">${ico(ts)}</div><div class="task-text">${t}</div><div class="task-meta-pills">${pills(meta)}</div><button class="task-status-btn ${scls(ts)}" onclick="event.stopPropagation();APP.doCyc('${ph.id}','${ge}','${te}')">${slbl(ts)}</button></div>`;
-}
-h+=`<div class="add-task-row"><input class="add-task-input" type="text" placeholder="Add task to ${g.name}..." id="ni-${ph.id}-${ge}" onkeydown="if(event.key==='Enter')APP.doAdd('${ph.id}','${ge}')"><button class="add-task-btn-sm" onclick="APP.doAdd('${ph.id}','${ge}')">+ Add</button></div></div>`;
-}
-h+=`<div class="notes-section"><div class="notes-label">Phase Notes</div><textarea class="notes-input" placeholder="Notes, blockers, decisions..." onchange="APP.doNote('${ph.id}',this.value)">${state['__note__'+ph.id]||''}</textarea></div>`;
-
-return h;
-}
-
-// ─── ACTIONS ──────────────────────────────────────────────────────────────────
-function show(id){currentId=id;$(‘main-content’).innerHTML=id===‘overview’?renderOverview():renderPhase(PHASES.find(p=>p.id===id));renderSidebar(id);updateStats();}
-function updateStats(){const s=allStats(),p=s.total?Math.round(s.done/s.total*100):0;$(‘stat-done’).textContent=s.done;$(‘stat-inprog’).textContent=s.inprog;$(‘stat-total’).textContent=s.total;$(‘global-fill’).style.width=p+’%’;$(‘global-pct’).textContent=p+’%’;}
-async function doToggle(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:getS(pid,g,t)===‘done’?‘todo’:‘done’});}
-async function doCyc(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:cyc(getS(pid,g,t))});}
-async function doAdd(pid,ge){
-const g=decodeURIComponent(ge),inp=$(‘ni-’+pid+’-’+ge);
-if(!inp)return;const v=inp.value.trim();if(!v)return;
-const ck=’**custom**’+pid+’__’+g,existing=state[ck]||{},idx=Object.keys(existing).length,patch={};
-patch[ck]={…existing,[idx]:v};await persist(patch);inp.value=’’;
-}
-async function doNote(pid,val){const patch={};patch[’**note**’+pid]=val;await persist(patch);}
-
-// ─── DRAWER ───────────────────────────────────────────────────────────────────
-const STATUSES=[‘todo’,‘inprogress’,‘review’,‘done’,‘blocked’];
-const SNAMES={todo:‘To Do’,inprogress:‘In Progress’,review:‘Review’,done:‘Done’,blocked:‘Blocked’};
-
-function openDrawer(pid,ge,te){
-const g=decodeURIComponent(ge),t=decodeURIComponent(te);
-dCtx={pid,g,t};
-const meta=getMeta(pid,g,t),ph=PHASES.find(p=>p.id===pid);
-$(‘dPhaseTag’).textContent=‘Phase ‘+(ph?.num||’’)+’ - ‘+(ph?.title||’’);
-$(‘dTaskNameDisplay’).textContent=t;
-$(‘dTaskName’).value=t;
-$(‘dAssignee’).value=meta.assignee||’’;
-$(‘dTimeframe’).value=meta.timeframe||’’;
-$(‘dNotes’).value=meta.notes||’’;
-dStatus=meta.status||‘todo’;
-renderStatusChips();
-$(‘drawerOverlay’).classList.add(‘open’);
-$(‘drawer’).classList.add(‘open’);
-$(‘dTaskName’).focus();
-}
-
-function closeDrawer(){$(‘drawerOverlay’).classList.remove(‘open’);$(‘drawer’).classList.remove(‘open’);dCtx=null;}
-
-function renderStatusChips(){
-$(‘dStatusRow’).innerHTML=STATUSES.map(s=>`<div class="status-chip chip-${s}${dStatus===s?' sel':''}" onclick="APP.selStatus('${s}')">${SNAMES[s]}</div>`).join(’’);
-}
-
-function selStatus(s){dStatus=s;renderStatusChips();}
-
-async function saveDrawer(){
-if(!dCtx)return;
-const{pid,g,t}=dCtx;
-const newName=($(‘dTaskName’).value||’’).trim()||t;
-const meta={status:dStatus,assignee:$(‘dAssignee’).value.trim(),timeframe:$(‘dTimeframe’).value,notes:$(‘dNotes’).value.trim()};
-if(newName!==t){
-const patch={};
-patch[fk(pid,g,newName)]={…getMeta(pid,g,t),…meta};
-patch[fk(pid,g,t)]=null;
-const ck=’**custom**’+pid+’**’+g,rk=’**renames**’+pid+’**’+g;
-const customList=state[ck]?{…state[ck]}:null;
-const customEntry=customList&&Object.entries(customList).find(([,v])=>v===t);
-if(customEntry){customList[customEntry[0]]=newName;patch[ck]=customList;}
-else{
-const cr={…(state[rk]||{})};
-let found=false;
-for(const[orig,renamed] of Object.entries(cr)){if(renamed===t){cr[orig]=newName;found=true;break;}}
-if(!found)cr[t]=newName;
-patch[rk]=cr;
-}
-await persist(patch);
-} else {
-await setMeta(pid,g,t,meta);
-}
-closeDrawer();show(currentId);toast(‘Task updated’);
-}
-
-async function deleteTask() {
-if (!dCtx) return;
-const { pid, g, t } = dCtx;
-
-if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
-
-const avatars = $(‘collabAvatars’);
-if (avatars && avatars.children.length > 1) {
-if (!confirm(“There are multiple people online right now.\nReally delete this task for everyone?”)) return;
-}
-
-const patch = {};
-
-// 1. Remove task metadata
-patch[fk(pid, g, t)] = null;
-
-const ck = ‘**custom**’ + pid + ‘**’ + g;
-const rk = ‘**renames**’ + pid + ’**’ + g;
-const dk = ‘**deleted**’ + pid + ‘__’ + g;
-
-// 2. Check if this is a custom (user-added) task
-const customList = state[ck] ? { …state[ck] } : null;
-const customEntry = customList && Object.entries(customList).find(([, v]) => v === t);
-
-if (customEntry) {
-// Custom task — remove from custom list
-delete customList[customEntry[0]];
-patch[ck] = Object.keys(customList).length ? customList : null;
-} else {
-// Built-in task — find its original name (before any rename)
-const renames = state[rk] || {};
-let originalName = t;
-for (const [orig, renamed] of Object.entries(renames)) {
-if (renamed === t) { originalName = orig; break; }
-}
-
-```
-// Clean up rename entry if it exists
-if (state[rk]) {
-const newRenames = { ...renames };
-delete newRenames[originalName];
-patch[rk] = Object.keys(newRenames).length ? newRenames : null;
-}
-
-// Mark original name as deleted — store as object key so Firebase keeps it
-const existing = state[dk] || {};
-patch[dk] = { ...existing, [originalName]: 1 };
-```
-
-}
-
-try {
-await persist(patch);
-closeDrawer();
-show(currentId);
-toast(‘Task permanently deleted’);
-} catch (err) {
-console.error(err);
-toast(‘Delete failed - check console’);
-}
-}
-
-window.APP={show,openDrawer,closeDrawer,doToggle,doCyc,doAdd,doNote,selStatus,saveDrawer,deleteTask};
-
-// ─── BOOT ─────────────────────────────────────────────────────────────────────
-function boot(){renderSidebar(‘overview’);show(‘overview’);initFirebase();}
-if(document.readyState===‘loading’){document.addEventListener(‘DOMContentLoaded’,boot);}else{boot();}
-</script>
-
-</body>
-</html>
-
-On Wed, Mar 4, 2026 at 9:50 AM Yeisaliz Perez <perezy2107@student.faytechcc.edu> wrote:
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Labyrinth Of Grief — Production Pipeline</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap
-" rel="stylesheet">
-
-<style>
-:root{--bg:#0a0806;--surface:#
-120f0a;--surface2:#1a1410;--surface3:#221c15;--border:#2e2318;--red:#a01a1a;--red-bright:#e03030;--red-dim:#6b1a1a;--red-glow:rgba(180,30,30,0.12);--blocked:#8b2a1a;--blocked-bright:#d44a2a;--green:#2a5c2a;--green-bright:#4a9c4a;--blue:#1a3a6b;--blue-bright:#4a7cc7;--text:#d4c4a0;--text-dim:#7a6a50;--text-bright:#f0e0c0}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:16px;min-height:100vh;overflow-x:hidden}
-header{background:linear-gradient(180deg,#0d0a06,var(--surface));border-bottom:1px solid var(--border);padding:0 2rem;position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 32px rgba(0,0,0,.6)}
-.logo{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;color:var(--red-bright);letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:.75rem}
-.logo-icon{width:24px;height:24px;background:var(--red);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:torchflicker 3s ease-in-out infinite}
-@keyframes torchflicker{0%,100%{opacity:1;transform:scale(1)}25%{opacity:.8;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}75%{opacity:.9;transform:scale(.98)}}
-.header-right{display:flex;align-items:center;gap:1.5rem}
-.header-stats{display:flex;gap:2rem;align-items:center}
-
-.stat-item{text-align:center}
-.stat-num{font-family:'Cinzel'
-,serif;font-size:1.4rem;font-weight:600;color:var(--red-bright);display:block;line-height:1}
-.stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.stat-divider{width:1px;height:32px;background:var(--border)}
-.sync-badge{display:flex;align-items:center;gap:.4rem;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);padding:.3rem .7rem;border:1px solid var(--border);border-radius:2px;transition:border-color .3s}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .3s}
-.sync-badge.syncing .sync-dot{background:var(--red-bright);animation:blink .7s infinite}
-
-.sync-badge.synced .sync-dot,.sync-badge.live .sync-dot{background:var(--
-green-bright)}
-
-.sync-badge.live .sync-dot{animation:blink 2s infinite}
-.sync-badge.live{border-color:
-rgba(74,156,74,.35)}
-
-@keyframes blink{0%,100%{opacity:1}50%{
-opacity:.25}}
-.progress-bar-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
-.progress-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;min-width:120px}
-.progress-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));border-radius:3px;transition:width .5s ease;box-shadow:0 0 8px var(--red)}
-.progress-pct{font-family:'Cinzel',serif;font-size:.85rem;color:var(--red-bright);min-width:40px;text-align:right}
-.collab-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.35rem 2rem;display:flex;align-items:center;gap:.75rem}
-.collab-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
-.collab-avatars{display:flex;gap:.3rem}
-.collab-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-family:'Cinzel',serif;border:1px solid;cursor:default;transition:transform .15s}
-.collab-avatar:hover{transform:scale(1.2)}
-.last-sync{margin-left:auto;font-size:.68rem;color:var(--text-dim);font-style:italic}
-.container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 118px);overflow:hidden}
-.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--surface)}
-.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.sidebar-section-title{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;padding:1.2rem 1.2rem .5rem;border-top:1px solid var(--border)}
-.sidebar-section-title:first-child{border-top:none}
-.phase-btn{display:flex;align-items:center;gap:.75rem;padding:.65rem 1.2rem;cursor:pointer;transition:all .15s;border-left:3px solid transparent;width:100%;background:none;border-right:none;border-top:none;border-bottom:none;text-align:left;color:var(--text);font-family:'Crimson Pro',serif;font-size:.95rem}
-.phase-btn:hover{background:var(--red-glow);color:var(--text-bright)}
-.phase-btn.active{background:var(--red-glow);border-left-color:var(--red);color:var(--red-bright)}
-.phase-num{font-family:'Cinzel',serif;font-size:.7rem;color:var(--red-dim);min-width:20px}
-
-.phase-btn.active .phase-num{color:var(--red)}
-.phase-mini-progress{margin-
-left:auto;font-size:.7rem;color:var(--text-dim)}
-.phase-btn.active .phase-mini-progress{color:var(--red)}
-.main-content{overflow-y:auto;padding:2rem;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--bg)}
-.main-content::-webkit-scrollbar{width:4px}.main-content::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.panel-header{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
-
-.panel-header-left{flex:1}
-.phase-tag{font-family:'
-Cinzel',serif;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.4rem}
-.panel-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:600;color:var(--text-bright);line-height:1.2;margin-bottom:.4rem}
-.panel-subtitle{font-size:1rem;color:var(--text-dim);font-style:italic}
-.phase-progress-ring{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0}
-.ring-pct{font-family:'Cinzel',serif;font-size:1.5rem;color:var(--red-bright);line-height:1}
-.ring-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.task-group{margin-bottom:1.5rem}
-.task-group-header{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
-.group-count{color:var(--red-dim);font-size:.7rem}
-.task-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;margin-bottom:3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.task-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .15s}
-.task-item:hover{border-color:var(--red-dim);background:var(--surface2)}
-.task-item:hover::before{background:var(--red-dim)}
-.task-item.done::before{background:var(--green-bright)}
-
-.task-item.done{opacity:.6}
-.task-item.inprogress::before{
-background:var(--red);box-shadow:0 0 6px rgba(160,26,26,.5)}
-.task-item.review::before{background:var(--blue-bright)}
-.task-item.blocked::before{background:var(--blocked-bright)}
-.task-check{width:18px;height:18px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.75rem;transition:all .15s;cursor:pointer}
-.task-item.done .task-check{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.task-item.inprogress .task-check{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.task-item.review .task-check{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.task-item.blocked .task-check{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-
-.task-text{flex:1;font-size:.
-95rem;color:var(--text);line-height:1.3}
-.task-item.done .task-text{text-decoration:line-through;color:var(--text-dim)}
-.task-meta-pills{display:flex;gap:.35rem;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:180px}
-.task-pill{font-size:.58rem;padding:2px 6px;border-radius:2px;border:1px solid;font-family:'Cinzel',serif;letter-spacing:.04em;white-space:nowrap}
-.pill-assign{border-color:rgba(74,124,199,.45);color:#6a9cd9;background:rgba(26,58,107,.3)}
-.pill-time{border-color:rgba(74,156,74,.45);color:#80c880;background:rgba(42,92,42,.2)}
-.task-status-btn{font-size:.65rem;padding:2px 8px;border-radius:2px;border:1px solid;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;background:none;transition:all .15s;white-space:nowrap}
-.btn-todo{border-color:var(--text-dim);color:var(--text-dim)}.btn-todo:hover{border-color:var(--red-dim);color:var(--red-dim)}
-.btn-inprogress{border-color:var(--red);color:var(--red)}
-.btn-review{border-color:var(--blue-bright);color:var(--blue-bright)}
-.btn-done{border-color:var(--green-bright);color:var(--green-bright)}
-.btn-blocked{border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.add-task-row{display:flex;gap:.5rem;margin-top:.75rem;margin-bottom:.5rem}
-.add-task-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.9rem;border-radius:3px;outline:none;transition:border-color .15s}
-.add-task-input:focus{border-color:var(--red-dim)}
-.add-task-input::placeholder{color:var(--text-dim);font-style:italic}
-.add-task-btn-sm{background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;cursor:pointer;transition:all .15s}
-.add-task-btn-sm:hover{background:var(--red);color:var(--bg)}
-.notes-section{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
-.notes-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.5rem}
-.notes-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.75rem;font-family:'Crimson Pro',serif;font-size:.95rem;line-height:1.6;font-style:italic;resize:vertical;min-height:90px;border-radius:3px;outline:none}
-.notes-input:focus{border-color:var(--red-dim)}
-.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.overview-card{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.overview-card:hover{border-color:var(--red-dim);background:var(--surface2)}
-.card-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));transition:width .6s ease}
-.card-num{font-family:'Cinzel',serif;font-size:.65rem;color:var(--red-dim);letter-spacing:.1em;margin-bottom:.3rem}
-.card-title{font-family:'Cinzel',serif;font-size:.9rem;font-weight:600;color:var(--text-bright);margin-bottom:.4rem;line-height:1.3}
-.card-pct{font-size:1.8rem;font-family:'Cinzel',serif;color:var(--red-bright);line-height:1;margin-bottom:.2rem}
-.card-tasks{font-size:.8rem;color:var(--text-dim)}
-
-.legend{display:flex;gap:1.
-5rem;margin-bottom:1rem;flex-wrap:wrap}
-.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim)}
-.legend-dot{width:8px;height:8px;border-radius:50%}
-
-/* DRAWER */
-.drawer-overlay{position:
-fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
-.drawer-overlay.open{opacity:1;pointer-events:all}
-.drawer{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);z-index:301;transform:translateX(105%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
-.drawer::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);pointer-events:none}
-.drawer.open{transform:translateX(0)}
-
-.drawer-header{padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border);background:
-linear-gradient(180deg,var(--surface2),var(--surface));position:sticky;top:0;z-index:1}
-.drawer-phase-tag{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.35rem}
-.drawer-task-name{font-family:'Cinzel',serif;font-size:.95rem;color:var(--text-bright);line-height:1.45;margin-bottom:1rem;padding-right:2rem}
-.drawer-status-row{display:flex;gap:.4rem;flex-wrap:wrap}
-.status-chip{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .65rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;color:var(--text-dim);user-select:none}
-.chip-todo.sel{background:rgba(122,106,80,.2);border-color:var(--text-dim);color:var(--text-bright)}
-.chip-inprogress.sel{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.chip-review.sel{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.chip-done.sel{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.chip-blocked.sel{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.status-chip:hover{border-color:var(--text-dim);color:var(--text)}
-
-.drawer-body{padding:1.25rem 1.5rem;flex:1;display:flex;
-flex-direction:column;gap:1.2rem}
-.drawer-field{display:flex;flex-direction:column;gap:.35rem}
-.drawer-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim)}
-.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.95rem;border-radius:3px;outline:none;transition:border-color .15s;width:100%}
-.di:focus{border-color:var(--red-dim)}
-.di::placeholder{color:var(--text-dim);font-style:italic}
-select.di{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.04em;cursor:pointer}
-select.di option{background:var(--surface2)}
-textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
-
-.drawer-footer{padding:1rem 1.5rem 1.5rem;display:flex;flex-
-direction:column;gap:.5rem;border-top:1px solid var(--border)}
-.drawer-footer-actions{display:flex;gap:.6rem}
-
-.drawer-save{flex:1;padding:.
-65rem;background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-save:hover{background:var(--red);color:var(--bg)}
-
-.drawer-cancel{padding:.65rem 1rem;background:none;border:
-1px solid var(--border);color:var(--text-dim);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-cancel:hover{border-color:var(--text-dim);color:var(--text)}
-.drawer-delete{width:100%;padding:.6rem;background:none;border:1px solid #3a1010;color:#7a3030;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;margin-top:.25rem}
-.drawer-delete:hover{background:rgba(160,26,26,.18);border-color:var(--red-bright);color:var(--red-bright);box-shadow:0 0 8px rgba(160,26,26,.2)}
-.drawer-close-btn{position:absolute;top:1rem;right:1rem;background:none;border:1px solid var(--border);color:var(--text-dim);width:26px;height:26px;border-radius:2px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:2}
-.drawer-close-btn:hover{border-color:var(--red-dim);color:var(--text)}
-.toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
-.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--red);padding:.6rem 1rem;font-size:.82rem;color:var(--text);border-radius:3px;animation:toastIn .3s ease;max-width:300px;line-height:1.4}
-.toast.fadeout{animation:toastOut .4s ease forwards}
-
-@keyframes toastIn{from{opacity:0;
-transform:translateY(8px)}to{opacity:1;transform:none}}
-
-@keyframes toastOut{to{opacity:0;
-transform:translateY(4px)}}
-
-</style>
-</head>
-<body>
-
-<header>
-<div class="logo"><div class="logo-icon"></div>
-Labyrinth Of Grief</div>
-
-<div class="header-right">
-<div class="header-stats">
-<div class="stat-item"><span class="stat-num" id="stat-done">0</span><span class="stat-label">Complete</
-span></div>
-
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-inprog">0</span><span class="stat-label">In Progress</span></div>
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Total Tasks</span></div>
-</div>
-<div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</
-span></div>
-
-</div>
+  <div class="logo"><span class="logo-star">&#9733;</span> Labyrinth Of Grief</div>
+  <div class="header-right">
+    <div class="hstats">
+      <div class="hstat"><span class="hstat-n" id="sDone">0</span><span class="hstat-l">Complete</span></div>
+      <div class="hdiv"></div>
+      <div class="hstat"><span class="hstat-n" id="sInprog">0</span><span class="hstat-l">In Progress</span></div>
+      <div class="hdiv"></div>
+      <div class="hstat"><span class="hstat-n" id="sTotal">0</span><span class="hstat-l">Total</span></div>
+    </div>
+    <div class="sync connecting" id="syncBadge">
+      <div class="sync-dot"></div><span id="syncLbl">Connecting</span>
+    </div>
+  </div>
 </header>
 
-<div class="progress-bar-wrap">
-<span class="progress-label">Overall Progress</span>
-<div class="progress-track"><div class="progress-fill" id="global-fill" style="width:0%"></div></div>
-<span class="progress-pct" id="global-pct">0%</span>
+<div class="prog-bar">
+  <span class="prog-label">Overall Progress</span>
+  <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  <span class="prog-pct" id="progPct">0%</span>
 </div>
 
 <div class="collab-bar">
-<span class="collab-label">Online</
-span>
-
-<div class="collab-avatars" id="collabAvatars"></div>
-<span class="last-sync" id="lastSync">—</span>
+  <span class="collab-lbl">Online</span>
+  <div class="collab-avatars" id="collabAv"></div>
+  <span class="last-sync" id="lastSync"></span>
 </div>
 
-<div class="container">
-<nav class="sidebar" id="sidebar"></nav>
-<div class="main-content" id="main-content"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main"   id="main"></div>
 </div>
 
-<!-- DRAWER -->
-<div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
-<div class="drawer" id="drawer">
-<button class="drawer-close-btn" onclick="APP.closeDrawer()">✕</button>
-<div class="drawer-header">
-<div class="drawer-phase-tag" id="dPhaseTag"></div>
-<div class="drawer-task-name" id="dTaskNameDisplay"></div>
-<div class="drawer-status-row" id="dStatusRow"></div>
-</div>
-<div class="drawer-body">
-<div class="drawer-field">
-<label class="drawer-label">✎ Task Name</label>
-<input class="di" id="dTaskName" placeholder="Task name…" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">⚔ Assignee</label>
-<input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">◷ Estimated Timeframe</label>
-<select class="di" id="dTimeframe">
-<option value="">— Select estimate —</option>
-<option value="1-2h">1–2 hours</option>
-<option value="half-day">Half day</option>
-<option value="1d">1 day</option>
-<option value="2-3d">2–3 days</option>
-<option value="1w">~1 week</option>
-<option value="2w">~2 weeks</option>
-<option value="1m">~1 month</option>
-<option value="ongoing">Ongoing</option>
-</select>
-</div>
-<div class="drawer-field">
-<label class="drawer-label">✦ Notes & Details</label>
-<textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links…"></textarea>
-</div>
-</div>
-<div class="drawer-footer">
-<div class="drawer-footer-actions">
-<button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
-<button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
-</div>
-<button class="drawer-delete" onclick="APP.deleteTask()"><span style="color:var(--red-bright)">🗑 Permanently Delete</span></button>
-</div>
+<!-- Drawer -->
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer"  id="drawer">
+  <button class="drawer-close" onclick="closeDrawer()">&#x2715;</button>
+  <div class="drawer-hd">
+    <div class="drawer-tag"      id="dTag"></div>
+    <div class="drawer-taskname" id="dName"></div>
+    <div class="status-row"      id="dStatus"></div>
+  </div>
+  <div class="drawer-body">
+    <div class="dfield">
+      <label class="dlabel">&#x270E; Task Name</label>
+      <input  class="dinput" id="dInpName"     placeholder="Task name&#8230;"          autocomplete="off">
+    </div>
+    <div class="dfield">
+      <label class="dlabel">&#x2694; Assignee</label>
+      <input  class="dinput" id="dInpAssign"   placeholder="Who owns this?"            autocomplete="off">
+    </div>
+    <div class="dfield">
+      <label class="dlabel">&#x25F7; Timeframe</label>
+      <select class="dinput" id="dInpTime">
+        <option value="">&#8212; Select estimate &#8212;</option>
+        <option value="1-2h">1&#8211;2 hours</option>
+        <option value="half-day">Half day</option>
+        <option value="1d">1 day</option>
+        <option value="2-3d">2&#8211;3 days</option>
+        <option value="1w">~1 week</option>
+        <option value="2w">~2 weeks</option>
+        <option value="1m">~1 month</option>
+        <option value="ongoing">Ongoing</option>
+      </select>
+    </div>
+    <div class="dfield">
+      <label class="dlabel">&#x2726; Notes</label>
+      <textarea class="dinput" id="dInpNotes" placeholder="Blockers, links, decisions&#8230;"></textarea>
+    </div>
+  </div>
+  <div class="drawer-ft">
+    <div class="ft-row">
+      <button class="btn-cancel" onclick="closeDrawer()">Cancel</button>
+      <button class="btn-save"   onclick="saveDrawer()">Save Changes</button>
+    </div>
+    <button class="btn-delete" onclick="deleteTask()">&#x1F5D1; Permanently Delete Task</button>
+  </div>
 </div>
 
-<div class="toast-container" id="toastContainer"></div>
+<div class="toasts" id="toasts"></div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  PHASE / TASK DATA
+// ═══════════════════════════════════════════════════════════════════════════
+var PHASES = [
+  { id:'overview', num:'&#9733;', title:'Project Overview', subtitle:'Full pipeline at a glance', overview:true },
 
-const firebaseConfig = {
-apiKey: "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
-authDomain: "labyrinth-of-grief-6a2e2.firebaseapp.com",
-databaseURL: "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
-projectId: "labyrinth-of-grief-6a2e2",
-storageBucket: "labyrinth-of-grief-6a2e2.firebasestorage.app",
-messagingSenderId: "148640942330",
-appId: "1:148640942330:web:8f091f07193cd434bba143"
-};
+  { id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
+    { name:'Concept & Vision', tasks:['Game Title and Tagline','One-Page Concept Document','Target Platform','Emotional Arc','Core Narrative Premise'] },
+    { name:'Level Concepts', tasks:['Level 1 Concept','Level 2 Concept','Level 3 Concept','Intermission Scene Concept','Emotional Transition Beats'] },
+    { name:'References & Moodboards', tasks:['Level 1 Moodboard','Level 2 Moodboard','Level 3 Moodboard','Player Movement References','Level Design References'] },
+    { name:'Narrative Design', tasks:['Amnesia Arc Structure','Dog Rescue Payoff Moments','Village NPC Design','Boss Lore Content','Ending Sequence Script'] },
+  ]},
 
-const PHASES = [
-{ id:'overview', num:'★', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
-{ id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
-{ name:'Concept & Vision', tasks:['Define game title and tagline','Write one-page concept document','Define target platform (PC / Console)','Lock core emotional arc: confusion → rage → grief → calm','Lock narrative premise: protagonist, dog, dungeon'] },
-{ name:'Level Concepts', tasks:['Level 1 concept: "The Awakening" — dungeon ruins','Level 2 concept: "The Bone Cavern" — goblin crypt','Level 3 concept: "Hollow Sky Cathedral" — bat belfry','Intermission design: above-ground NPC village scene','Define emotional transition beats between each level'] },
-{ name:'References & Moodboards', tasks:['Moodboard: Level 1 visual tone (stone dungeon)','Moodboard: Level 2 visual tone (bone cavern)','Moodboard: Level 3 visual tone (cathedral/belfry)','Reference games: movement feel (Celeste, Hollow Knight)','Reference games: dungeon design (Dark Souls, Limbo)'] },
-{ name:'Narrative Design', tasks:['Write amnesia arc beats — what fragments does player recover?','Design dog-rescue emotional payoff moments','NPC design: village character with missing cat','Memory shard content (lore per boss defeat)','Final escape sequence narrative scripting'] },
-]},
-{ id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design', groups:[
-{ name:'Level Design Documents', tasks:['Full LDD: Level 1 — Awakening (all rooms)','Full LDD: Level 2 — Bone Cavern (all 17 zones)','Full LDD: Level 3 — Hollow Sky Cathedral (all 5 phases)','Define all secret rooms and collectibles (collar, ball, hearts)','Define all puzzle solutions with step-by-step logic'] },
-{ name:'Enemy Design', tasks:['Normal Monster — patrol pattern, detect range, attack','Siegus Monster — passive trigger conditions, aggro speed','Echo Monster — sound radius, aggro logic, pathfinding','Statue Monster — proximity awaken range, timing window','Light Guardian — patrol zones, shadow detection logic','Ravager — group behavior, obstacle destruction','Level 1 Golem Boss — sleep/awaken/charge/die pattern','Goblin King — 3-phase FSM, seesaw reflect, minion spawns','Bat Queen — 3-phase: swarm / aerial pursuit / solo silence'] },
-{ name:'Puzzle Design', tasks:['L1: 2-button gate puzzle (box + player)','L1: Golem-charges-wall puzzle','L1: Boss grapple-to-head attack loop','L2: Seesaw crate-launch traversal (#2)','L2: Skull weight accumulation puzzle (#5)','L2: Goblin pressure-button launch puzzle (#4)','L2: Structure demolition path puzzles (#6, #7, #8)','L3: Bell sequence puzzle (Phase 3 belfry)','L3: Sound-based swarm-redirect platforming','L3: Bat Queen shield break via sound'] },
-{ name:'Pacing & Progression', tasks:['Map ability unlock order across all 3 levels','Define safe zone and checkpoint placement','Define tension/relief rhythm per level','Balance optional vs required content ratio'] },
-]},
-// ... add the remaining PHASES objects here exactly as in your original code
-// (I omitted them here to keep the response readable – copy-paste your full PHASES array)
+  { id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design', groups:[
+    { name:'Level Design Documents', tasks:['Level 1 Design Document','Level 2 Design Document','Level 3 Design Document','Secrets and Collectibles Map','Puzzle Solutions Document'] },
+    { name:'Enemy Design', tasks:['Standard Enemy','Siege Enemy','Echo Enemy','Statue Enemy','Light Guardian','Ravager','Level 1 Boss','Level 2 Boss','Level 3 Boss'] },
+    { name:'Puzzle Design', tasks:['Level 1 Gate Puzzle','Level 1 Wall Charge Puzzle','Level 1 Boss Grapple Puzzle','Level 2 Seesaw Launch Puzzle','Level 2 Skull Weight Puzzle','Level 2 Pressure Button Puzzle','Level 2 Demolition Path Puzzles','Level 3 Bell Sequence Puzzle','Level 3 Swarm Redirect Puzzle','Level 3 Boss Shield Puzzle'] },
+    { name:'Pacing & Progression', tasks:['Ability Unlock Order','Checkpoint Placement','Tension and Relief Rhythm','Optional vs Required Content Balance'] },
+  ]},
+
+  { id:'blockout', num:'03', title:'Blockout / Greybox', subtitle:'First Playable Version', groups:[
+    { name:'Level 1 Blockout', tasks:['Level 1 Room Layout','Level 1 Grapple Range Test','Level 1 Enemy Placement','Level 1 Boss Arena Test','Level 1 Puzzle Validation'] },
+    { name:'Level 2 Blockout', tasks:['Level 2 Cavern Geometry','Level 2 Seesaw Physics Test','Level 2 Key-Path Routes','Level 2 Destructible Collision Test','Level 2 Boss Arena Validation'] },
+    { name:'Level 3 Blockout', tasks:['Level 3 Vertical Scale Test','Level 3 Bat Grapple Points','Level 3 Bell Tower Layout','Level 3 Aerial Gap Test','Level 3 Boss Arena Validation'] },
+    { name:'Core Feel Validation', tasks:['Player Movement Feel','Grapple Hook Feel','Enemy Detection Debug','Sound Radius Visualisation','Checkpoint and Respawn Test'] },
+  ]},
+
+  { id:'art', num:'04', title:'Art Production', subtitle:'Concept, 3D, Texture, Animation', groups:[
+    { name:'Concept Art', tasks:['Protagonist Concept','Companion Dog Concept','Level 1 Boss Concept','Goblin Concepts','Skeleton Enemy Concept','Bat Enemy Concepts','Level 3 Boss Concept','Level 1 Environment Concept','Level 2 Environment Concept','Level 3 Environment Concept','Key Props Concept'] },
+    { name:'3D Modeling - Characters', tasks:['Protagonist Model','Level 1 Boss Model','Goblin Models','Skeleton Enemy Model','Bat Enemy Models','Level 3 Boss Model','Companion Dog Model'] },
+    { name:'3D Modeling - Environment', tasks:['Level 1 Modular Tile Kit','Level 2 Modular Tile Kit','Level 3 Modular Tile Kit','Goblin Structure Props','Interactive Props','Destructible Structure Variants'] },
+    { name:'UV Mapping & Texturing', tasks:['Character UV Unwrap','Character Base Color Maps','Character Normal Maps','Character Roughness and Metallic Maps','Environment Tileset Textures','Props Textures'] },
+    { name:'Rigging & Animation', tasks:['Protagonist Rig','Protagonist Animations','Level 1 Boss Animations','Goblin Animations','Skeleton Animations','Standard Bat Animations','Giant Bat Animations','Level 3 Boss Animations'] },
+  ]},
+
+  { id:'integration', num:'05', title:'Engine Integration', subtitle:'Importing & Engine Setup', groups:[
+    { name:'Asset Import Pipeline', tasks:['Project Folder Structure','Character Import and Scale Check','Environment Tile Import','Props Import and Collision','PBR Material Setup'] },
+    { name:'Physics & Collision', tasks:['Player Controller','Grapple System','Seesaw Physics','Destructible Breakpoints','Bat Ride Physics','Level 3 Wind Volumes'] },
+    { name:'Animation Integration', tasks:['Protagonist Animator','Enemy Animators','Boss Animators','Movement Blend Trees','Animation Event Triggers'] },
+  ]},
+
+  { id:'programming', num:'06', title:'Programming / Systems', subtitle:'Core Code & AI', groups:[
+    { name:'Core Mechanics', tasks:['Grappling Hook System','Grapple Combat Interactions','Stealth System','Sound Radius System','Shadow Detection System'] },
+    { name:'Enemy AI', tasks:['Standard Enemy AI','Siege Enemy AI','Echo Enemy AI','Statue Enemy AI','Light Guardian AI','Ravager AI'] },
+    { name:'Boss Logic', tasks:['Level 1 Boss AI','Level 2 Boss Phase 1','Level 2 Boss Phase 2','Level 2 Boss Phase 3','Level 3 Boss Phase 1','Level 3 Boss Phase 2','Level 3 Boss Phase 3'] },
+    { name:'Level 3 Sound System', tasks:['Noise Event Emitter','Bat Swarm Trigger','Swarm Platform System','Enemy Shield Disruption','Hidden Path Reveal'] },
+    { name:'Game Systems', tasks:['Health System','Checkpoint System','Key and Lock System','Collectibles Tracker','HUD','Pause Menu and Settings','Save and Load System'] },
+  ]},
+
+  { id:'lighting', num:'07', title:'Lighting & Atmosphere', subtitle:'VFX, Sound, Music', groups:[
+    { name:'Lighting', tasks:['Level 1 Lighting','Level 2 Lighting','Level 3 Lighting','Dynamic Shadow Pass','Boss Arena Lighting','Secret Room Lighting'] },
+    { name:'Visual FX', tasks:['Grapple VFX','Impact Particles','Bat Swarm Particles','Wind VFX','Enemy Alert VFX','Sound Wave VFX','Destruction Particles','Ending Light Shaft VFX'] },
+    { name:'Ambient Sound Design', tasks:['Level 1 Ambient Audio','Level 2 Ambient Audio','Level 3 Ambient Audio','Player Breathing Layer','Companion Dog Audio','Enemy Footsteps','Echo Enemy Audio'] },
+    { name:'Music', tasks:['Main Theme','Level 1 Music','Level 2 Music','Level 3 Music','Level 1 Boss Theme','Level 2 Boss Theme','Level 3 Boss Theme','Level 3 Boss Final Phase Theme','Ending Sequence Music','Dynamic Music System'] },
+  ]},
+
+  { id:'testing', num:'08', title:'Testing & Iteration', subtitle:'Playtesting & Bug Fixing', groups:[
+    { name:'Playtesting', tasks:['Internal Full Playthrough','Puzzle Logic Review','Movement Feel Pass','Enemy Fairness Review','Boss Difficulty Tuning','Collectibles Accessibility Check','External Playtest Session','Onboarding Review'] },
+    { name:'Bug Fixing', tasks:['Critical Bugs','High Priority Bugs','Medium Priority Bugs','Low Priority Bugs'] },
+    { name:'Balancing', tasks:['Difficulty Curve Validation','Death Heatmap Analysis','Combat Number Tuning','Puzzle Timing Review','Enemy Density Review'] },
+  ]},
+
+  { id:'optimization', num:'09', title:'Optimization', subtitle:'Performance & Final Polish', groups:[
+    { name:'Rendering', tasks:['LOD Setup','Polygon Reduction Pass','Occlusion Culling Setup','Draw Call Batching','Texture Atlasing'] },
+    { name:'Lighting & VFX', tasks:['Static Lightmap Bake','Particle Budget Cap','Shadow Quality Settings'] },
+    { name:'Performance Targets', tasks:['PC 60fps Validation','Console Performance Check','Memory Profiling','Load Time Optimisation','Final Build Size Reduction'] },
+  ]},
 ];
 
-let state = {};
-let db, stateRef, presenceRef;
-let currentId = 'overview';
-let dStatus = 'todo';
-let dCtx = null;
-let pendingWrites = 0;
+// ═══════════════════════════════════════════════════════════════════════════
+//  FIREBASE + APP STATE
+// ═══════════════════════════════════════════════════════════════════════════
+var FB_CONFIG = {
+  apiKey:            "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
+  authDomain:        "labyrinth-of-grief-6a2e2.firebaseapp.com",
+  databaseURL:       "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
+  projectId:         "labyrinth-of-grief-6a2e2",
+  storageBucket:     "labyrinth-of-grief-6a2e2.firebasestorage.app",
+  messagingSenderId: "148640942330",
+  appId:             "1:148640942330:web:8f091f07193cd434bba143"
+};
 
-const $ = id => document.getElementById(id);
+var db         = null;
+var STATE      = {};          // mirror of Firebase pipeline/state
+var currentId  = 'overview';
+var dCtx       = null;        // { pid, group, taskName }
+var dSelStatus = 'todo';
+var SID        = Math.random().toString(36).slice(2,8).toUpperCase();
+var MY_COLOR   = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4ac9','#30c8c8'][Math.floor(Math.random()*6)];
 
-function badge(s, lbl) {
-const b = $('syncBadge'), l = $('syncLabel');
-b.className = 'sync-badge ' + s;
-l.textContent = lbl || { syncing:'Syncing…', live:'Live', offline:'Offline' }[s] || s;
-}
-
-function toast(msg, dur = 2800) {
-const c = $('toastContainer'), el = document.createElement('div');
-el.className = 'toast'; el.textContent = msg; c.appendChild(el);
-setTimeout(() => { el.classList.add('fadeout'); setTimeout(() => el.remove(), 400); }, dur);
-}
-
+// ── FIREBASE INIT ────────────────────────────────────────────────────────────
 function initFirebase() {
-try {
-const app = initializeApp(firebaseConfig);
-db = getDatabase(app);
-stateRef = ref(db, 'pipeline/state');
-presenceRef = ref(db, 'pipeline/presence');
-badge('syncing');
+  try {
+    firebase.initializeApp(FB_CONFIG);
+    db = firebase.database();
 
-onValue(stateRef, snap => {
-if (pendingWrites > 0) {
-console.log('[sync] Skipping stale snapshot (pending writes:', pendingWrites, ')');
-return;
-}
-state = snap.val() || {};
-show(currentId);
-updateStats();
-badge('live');
-$('lastSync').textContent = 'Live · ' + new Date().toLocaleTimeString();
-});
+    // Listen to ALL state changes in real time
+    db.ref('pipeline/state').on('value', function(snap) {
+      STATE = snap.val() || {};
+      renderAll();
+      badge('live', 'Live');
+      document.getElementById('lastSync').textContent = 'Live · ' + new Date().toLocaleTimeString();
+    });
 
-heartbeat();
-setInterval(heartbeat, 15000);
-setInterval(cleanPresence, 30000);
-toast('Connected — You are ' + SID);
-} catch (e) {
-console.error('Firebase init failed:', e);
-badge('offline');
-toast('Connection failed');
-}
+    // Presence heartbeat
+    heartbeat();
+    setInterval(heartbeat, 15000);
+    setInterval(cleanPresence, 40000);
+
+    toast('Connected — ' + SID);
+  } catch(e) {
+    console.error('Firebase error:', e);
+    badge('offline', 'Offline');
+    toast('Firebase unavailable — changes are local only');
+  }
 }
 
-async function persist(patch) {
-if (!Object.keys(patch).length) return;
+// ── FIREBASE WRITE ───────────────────────────────────────────────────────────
+// patch = plain object of path:value pairs under pipeline/state
+// null values DELETE that path in Firebase (and stay deleted in onValue)
+function saveState(patch) {
+  // Apply locally immediately so UI feels instant
+  for (var k in patch) {
+    if (patch[k] === null) {
+      delete STATE[k];
+    } else {
+      STATE[k] = patch[k];
+    }
+  }
+  renderAll();
 
-pendingWrites++;
-console.log('[persist] Sending patch:', patch);
-
-Object.assign(state, patch);
-show(currentId);
-updateStats();
-
-if (!db) {
-pendingWrites--;
-return;
-}
-
-try {
-badge('syncing');
-await update(stateRef, patch);
-console.log('[persist] Success');
-} catch (e) {
-console.error('[persist] Failed:', e);
-badge('offline');
-toast('Save failed');
-} finally {
-pendingWrites = Math.max(0, pendingWrites - 1);
-if (pendingWrites === 0) badge('live');
-}
+  if (!db) return;
+  badge('connecting', 'Saving...');
+  db.ref('pipeline/state').update(patch, function(err) {
+    if (err) {
+      console.error('Save error:', err);
+      toast('Save failed — check console');
+      badge('offline', 'Offline');
+    }
+  });
 }
 
-async function heartbeat() {
-if (!db) return;
-try {
-await set(ref(db, 'pipeline/presence/' + SID), { id:SID, color:MY_COLOR, ts:Date.now() });
-const snap = await get(presenceRef);
-const all = snap.val() || {};
-const active = Object.values(all).filter(u => Date.now() - u.ts < 45000);
-$('collabAvatars').innerHTML = active.map(u =>
-`<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`
-).join('');
-if (active.length > 1) badge('live', active.length + ' Online');
-} catch (e) {}
+function heartbeat() {
+  if (!db) return;
+  db.ref('pipeline/presence/' + SID).set({ id: SID, color: MY_COLOR, ts: Date.now() });
+  db.ref('pipeline/presence').once('value', function(snap) {
+    var all    = snap.val() || {};
+    var active = Object.values(all).filter(function(u){ return Date.now() - u.ts < 50000; });
+    var el     = document.getElementById('collabAv');
+    if (el) {
+      el.innerHTML = active.map(function(u) {
+        return '<div class="avatar" style="background:' + u.color + '22;border-color:' + u.color + '60;color:' + u.color + '" title="' + u.id + (u.id===SID?' (you)':'') + '">' + u.id.slice(0,2) + '</div>';
+      }).join('');
+    }
+    if (active.length > 1) badge('live', active.length + ' Online');
+  });
 }
 
-async function cleanPresence() {
-if (!db) return;
-try {
-const snap = await get(presenceRef);
-const all = snap.val() || {}, updates = {};
-for (const [k,v] of Object.entries(all)) {
-if (Date.now() - v.ts > 60000) updates['pipeline/presence/' + k] = null;
-}
-if (Object.keys(updates).length) await update(ref(db), updates);
-} catch (e) {}
+function cleanPresence() {
+  if (!db) return;
+  db.ref('pipeline/presence').once('value', function(snap) {
+    var all = snap.val() || {};
+    Object.keys(all).forEach(function(k) {
+      if (Date.now() - all[k].ts > 60000) db.ref('pipeline/presence/' + k).remove();
+    });
+  });
 }
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
-function fk(p, g, t) {
-return p + '|||' + g + '|||' + btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g, '_');
+function badge(cls, lbl) {
+  var b = document.getElementById('syncBadge');
+  var l = document.getElementById('syncLbl');
+  b.className = 'sync ' + cls;
+  l.textContent = lbl;
 }
 
-function getMeta(p, g, t) {
-return state[fk(p, g, t)] || {};
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATE KEY HELPERS
+//
+//  All per-task data lives at a Firebase-safe key under pipeline/state.
+//  We use base64 to handle arbitrary task names (spaces, special chars).
+//
+//  Key format:  "meta|||{phaseId}|||{groupName}|||{b64taskName}"
+//  Custom list: "custom|||{phaseId}|||{groupName}"   →  { "0":"name","1":"name",... }
+//  Renames:     "rename|||{phaseId}|||{groupName}"   →  { "b64orig":"b64new", ... }
+//  Deleted:     "deleted|||{phaseId}|||{groupName}"  →  { "b64orig": true, ... }
+//  Phase notes: "note|||{phaseId}"
+// ═══════════════════════════════════════════════════════════════════════════
+function b64(s)  { return btoa(unescape(encodeURIComponent(s))).replace(/[+/=]/g,'_'); }
+function ub64(s) { try { return decodeURIComponent(escape(atob(s.replace(/_/g,function(c,i,a){ var map='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='; return a.indexOf(c)>=0?c:['','+','/','='][i%3+0]||c; }))));} catch(e){ return s; } }
+
+function metaKey(pid, grp, name) { return 'meta|||' + pid + '|||' + grp + '|||' + b64(name); }
+function customKey(pid, grp)     { return 'custom|||' + pid + '|||' + grp; }
+function renameKey(pid, grp)     { return 'rename|||' + pid + '|||' + grp; }
+function deletedKey(pid, grp)    { return 'deleted|||' + pid + '|||' + grp; }
+function noteKey(pid)            { return 'note|||' + pid; }
+
+function getMeta(pid, grp, name) { return STATE[metaKey(pid, grp, name)] || {}; }
+function getStatus(pid, grp, name) { return getMeta(pid, grp, name).status || 'todo'; }
+
+// Returns the final visible task list for a group, applying renames and filtering deletes
+function resolveGroup(pid, grpName, rawTasks) {
+  var renames  = STATE[renameKey(pid, grpName)]  || {};
+  var deleted  = STATE[deletedKey(pid, grpName)] || {};
+  var customs  = STATE[customKey(pid, grpName)]  || {};
+
+  // Build resolved built-in list
+  var builtIn = [];
+  rawTasks.forEach(function(orig) {
+    var k = b64(orig);
+    if (deleted[k]) return;           // skip deleted originals
+    var renamed = renames[k];
+    if (renamed) {
+      var rk = b64(renamed);
+      if (deleted[rk]) return;        // skip if renamed version was deleted
+      builtIn.push(renamed);
+    } else {
+      builtIn.push(orig);
+    }
+  });
+
+  // Custom tasks
+  var custom = Object.values(customs);
+
+  return builtIn.concat(custom);
 }
 
-function getS(p, g, t) {
-return getMeta(p, g, t).status || 'todo';
-}
-
-async function setMeta(p, g, t, m) {
-const k = fk(p, g, t);
-const patch = {};
-patch[k] = { ...getMeta(p, g, t), ...m };
-await persist(patch);
-}
-
-function resolvedTasks(phId, gName, rawTasks) {
-const renames = state['__renames__' + phId + '__' + gName] || {};
-const deleted = state['__deleted__' + phId + '__' + gName] || {};
-const deletedKeys = new Set(Object.keys(deleted));
-return rawTasks
-.filter(t => !deletedKeys.has(t))
-.map(t => renames[t] || t)
-.filter(t => !deletedKeys.has(t));
-}
-
-function pStats(ph) {
-if (ph.isOverview) return { done:0, inprog:0, total:0 };
-let d = 0, i = 0, to = 0;
-for (const g of ph.groups) {
-const custom = state['__custom__' + ph.id + '__' + g.name] ? Object.values(state['__custom__' + ph.id + '__' + g.name]) : [];
-const all = [...resolvedTasks(ph.id, g.name, g.tasks), ...custom];
-for (const t of all) {
-to++;
-const s = getS(ph.id, g.name, t);
-if (s === 'done') d++;
-else if (s === 'inprogress') i++;
-}
-}
-return { done:d, inprog:i, total:to };
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════════════════════════════════
+function phaseStats(ph) {
+  if (ph.overview) return { done:0, prog:0, total:0 };
+  var d=0, p=0, t=0;
+  ph.groups.forEach(function(g) {
+    var tasks = resolveGroup(ph.id, g.name, g.tasks);
+    tasks.forEach(function(name) {
+      t++;
+      var s = getStatus(ph.id, g.name, name);
+      if (s==='done') d++;
+      else if (s==='inprogress') p++;
+    });
+  });
+  return { done:d, prog:p, total:t };
 }
 
 function allStats() {
-let d = 0, i = 0, t = 0;
-for (const p of PHASES) {
-if (p.isOverview) continue;
-const s = pStats(p);
-d += s.done;
-i += s.inprog;
-t += s.total;
-}
-return { done:d, inprog:i, total:t };
+  var d=0, p=0, t=0;
+  PHASES.forEach(function(ph) {
+    if (ph.overview) return;
+    var s = phaseStats(ph);
+    d += s.done; p += s.prog; t += s.total;
+  });
+  return { done:d, prog:p, total:t };
 }
 
-function cyc(c) { return { todo:'inprogress', inprogress:'review', review:'done', done:'blocked', blocked:'todo' }[c] || 'todo'; }
-function ico(s) { return { todo:'', inprogress:'◑', review:'◐', done:'✓', blocked:'✕' }[s] || ''; }
-function slbl(s) { return { todo:'To Do', inprogress:'In Progress', review:'Review', done:'Done', blocked:'Blocked' }[s] || 'To Do'; }
-function scls(s) { return { todo:'btn-todo', inprogress:'btn-inprogress', review:'btn-review', done:'btn-done', blocked:'btn-blocked' }[s] || 'btn-todo'; }
-function tflbl(v) { return { '1-2h':'1-2h', 'half-day':'½day', '1d':'1d', '2-3d':'2-3d', '1w':'1wk', '2w':'2wk', '1m':'1mo', 'ongoing':'∞' }[v] || v; }
-
-function pills(meta) {
-let p = '';
-if (meta.assignee) p += `<span class="task-pill pill-assign">⚔ ${meta.assignee}</span>`;
-if (meta.timeframe) p += `<span class="task-pill pill-time">◷ ${tflbl(meta.timeframe)}</span>`;
-return p;
+// ═══════════════════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function renderAll() {
+  renderSidebar();
+  renderMain();
+  renderStats();
 }
 
-// ─── RENDER ─────────────────────────────────────────────────────────────────
-function renderSidebar(aid) {
-let h = '<div class="sidebar-section-title">Navigation</div>';
-for (const p of PHASES) {
-const s = p.isOverview ? null : pStats(p);
-const pct = s ? (s.total ? Math.round(s.done / s.total * 100) : 0) : null;
-h += `<button class="phase-btn ${aid === p.id ? 'active' : ''}" onclick="APP.show('${p.id}')">
-<span class="phase-num">${p.num}</span><span>${p.title}</span>
-${s ? `<span class="phase-mini-progress">${pct}%</span>` : ''}
-</button>`;
+function renderStats() {
+  var s = allStats();
+  var pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+  document.getElementById('sDone').textContent   = s.done;
+  document.getElementById('sInprog').textContent = s.prog;
+  document.getElementById('sTotal').textContent  = s.total;
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progPct').textContent  = pct + '%';
 }
-$('sidebar').innerHTML = h;
+
+function renderSidebar() {
+  var html = '<div class="sidebar-hd">Navigation</div>';
+  PHASES.forEach(function(ph) {
+    var s   = ph.overview ? null : phaseStats(ph);
+    var pct = s ? (s.total ? Math.round(s.done/s.total*100) : 0) : null;
+    html += '<button class="nav-btn' + (currentId===ph.id ? ' active':'') + '" onclick="navigate(\'' + ph.id + '\')">'
+          + '<span class="nav-num">' + ph.num + '</span>'
+          + '<span>' + ph.title + '</span>'
+          + (s !== null ? '<span class="nav-pct">' + pct + '%</span>' : '')
+          + '</button>';
+  });
+  document.getElementById('sidebar').innerHTML = html;
+}
+
+function renderMain() {
+  var ph = PHASES.find(function(p){ return p.id === currentId; });
+  if (!ph) return;
+  document.getElementById('main').innerHTML = ph.overview ? renderOverview() : renderPhase(ph);
+}
+
+function navigate(id) {
+  currentId = id;
+  renderAll();
 }
 
 function renderOverview() {
-const s = allStats(), pct = s.total ? Math.round(s.done / s.total * 100) : 0;
-let h = `<div class="panel-header">
-<div class="panel-header-left">
-<div class="phase-tag">★ Master View</div>
-<div class="panel-title">Labyrinth Of Grief</div>
-<div class="panel-subtitle">Full game development pipeline</div>
-</div>
-<div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div>
-</div>
-<div class="legend">
-<div class="legend-item"><div class="legend-dot" style="background:var(--text-dim)"></div>To Do</div>
-<div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>In Progress</div>
-<div class="legend-item"><div class="legend-dot" style="background:var(--blue-bright)"></div>Review</div>
-<div class="legend-item"><div class="legend-dot" style="background:var(--green-bright)"></div>Done</div>
-<div class="legend-item"><div class="legend-dot" style="background:var(--blocked-bright)"></div>Blocked</div>
-</div><div class="overview-grid">`;
-for (const p of PHASES) {
-if (p.isOverview) continue;
-const ps = pStats(p), pp = ps.total ? Math.round(ps.done / ps.total * 100) : 0;
-h += `<div class="overview-card" onclick="APP.show('${p.id}')">
-<div class="card-progress-bar" style="width:${pp}%"></div>
-<div class="card-num">${p.num}</div>
-<div class="card-title">${p.title}</div>
-<div class="card-pct">${pp}%</div>
-<div class="card-tasks">${ps.done}/${ps.total} tasks · ${ps.inprog} active</div>
-</div>`;
-}
-return h + '</div>';
+  var s   = allStats();
+  var pct = s.total ? Math.round(s.done/s.total*100) : 0;
+  var h = '<div class="ph"><div class="ph-left"><div class="ph-tag">&#9733; Master View</div>'
+        + '<div class="ph-title">Labyrinth Of Grief</div>'
+        + '<div class="ph-sub">Full game development pipeline</div></div>'
+        + '<div class="ph-ring"><div class="ph-ring-n">' + pct + '%</div><div class="ph-ring-l">' + s.done + '/' + s.total + '</div></div></div>';
+  h += '<div class="legend">'
+     + '<div class="leg-item"><div class="leg-dot" style="background:var(--text-dim)"></div>To Do</div>'
+     + '<div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>In Progress</div>'
+     + '<div class="leg-item"><div class="leg-dot" style="background:var(--blue-bright)"></div>Review</div>'
+     + '<div class="leg-item"><div class="leg-dot" style="background:var(--green-bright)"></div>Done</div>'
+     + '<div class="leg-item"><div class="leg-dot" style="background:#d44a2a"></div>Blocked</div>'
+     + '</div><div class="ov-grid">';
+  PHASES.forEach(function(ph) {
+    if (ph.overview) return;
+    var ps  = phaseStats(ph);
+    var pp  = ps.total ? Math.round(ps.done/ps.total*100) : 0;
+    h += '<div class="ov-card" onclick="navigate(\'' + ph.id + '\')">'
+       + '<div class="ov-bar" style="width:' + pp + '%"></div>'
+       + '<div class="ov-num">' + ph.num + '</div>'
+       + '<div class="ov-title">' + ph.title + '</div>'
+       + '<div class="ov-pct">' + pp + '%</div>'
+       + '<div class="ov-sub">' + ps.done + '/' + ps.total + ' tasks &middot; ' + ps.prog + ' active</div>'
+       + '</div>';
+  });
+  return h + '</div>';
 }
 
 function renderPhase(ph) {
-const s = pStats(ph), pct = s.total ? Math.round(s.done / s.total * 100) : 0;
-let h = `<div class="panel-header">
-<div class="panel-header-left">
-<div class="phase-tag">Phase ${ph.num}</div>
-<div class="panel-title">${ph.title}</div>
-<div class="panel-subtitle">${ph.subtitle}</div>
-</div>
-<div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">${s.done}/${s.total}</div></div>
-</div>`;
-for (const g of ph.groups) {
-const custom = state['__custom__' + ph.id + '__' + g.name] ? Object.values(state['__custom__' + ph.id + '__' + g.name]) : [];
-const all = [...resolvedTasks(ph.id, g.name, g.tasks), ...custom];
-const gd = all.filter(t => getS(ph.id, g.name, t) === 'done').length;
-const ge = encodeURIComponent(g.name);
-h += `<div class="task-group">
-<div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
-for (const t of all) {
-const ts = getS(ph.id, g.name, t), meta = getMeta(ph.id, g.name, t), te = encodeURIComponent(t);
-h += `<div class="task-item ${ts}" onclick="APP.openDrawer('${ph.id}','${ge}','${te}')">
-<div class="task-check" onclick="event.stopPropagation();APP.doToggle('${ph.id}','${ge}','${te}')">${ico(ts)}</div>
-<div class="task-text">${t}</div>
-<div class="task-meta-pills">${pills(meta)}</div>
-<button class="task-status-btn ${scls(ts)}" onclick="event.stopPropagation();APP.doCyc('${ph.id}','${ge}','${te}')">${slbl(ts)}</button>
-</div>`;
-}
-h += `<div class="add-task-row">
-<input class="add-task-input" type="text" placeholder="Add task to ${g.name}…" id="ni-${ph.id}-${ge}" onkeydown="if(event.key==='Enter')APP.doAdd('${ph.id}','${ge}')">
-<button class="add-task-btn-sm" onclick="APP.doAdd('${ph.id}','${ge}')">+ Add</button>
-</div></div>`;
-}
-h += `<div class="notes-section">
-<div class="notes-label">Phase Notes</div>
-<textarea class="notes-input" placeholder="Notes, blockers, decisions…" onchange="APP.doNote('${ph.id}',this.value)">${state['__note__' + ph.id] || ''}</textarea>
-</div>`;
-return h;
+  var s   = phaseStats(ph);
+  var pct = s.total ? Math.round(s.done/s.total*100) : 0;
+  var h   = '<div class="ph"><div class="ph-left">'
+          + '<div class="ph-tag">Phase ' + ph.num + '</div>'
+          + '<div class="ph-title">' + ph.title + '</div>'
+          + '<div class="ph-sub">' + ph.subtitle + '</div></div>'
+          + '<div class="ph-ring"><div class="ph-ring-n">' + pct + '%</div><div class="ph-ring-l">' + s.done + '/' + s.total + '</div></div></div>';
+
+  ph.groups.forEach(function(g) {
+    var tasks = resolveGroup(ph.id, g.name, g.tasks);
+    var done  = tasks.filter(function(t){ return getStatus(ph.id, g.name, t) === 'done'; }).length;
+    var gEnc  = encodeURIComponent(g.name);
+
+    h += '<div class="tgroup"><div class="tgroup-hd"><span>' + g.name + '</span>'
+       + '<span class="tgroup-ct">' + done + '/' + tasks.length + '</span></div>';
+
+    tasks.forEach(function(tname) {
+      var ts   = getStatus(ph.id, g.name, tname);
+      var meta = getMeta(ph.id, g.name, tname);
+      var tEnc = encodeURIComponent(tname);
+      var ico  = {todo:'',inprogress:'&#x25D1;',review:'&#x25D0;',done:'&#x2713;',blocked:'&#x2715;'}[ts] || '';
+      var slbl = {todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'}[ts] || 'To Do';
+      var scls = 'sbtn-' + ts;
+      var pillsHtml = '';
+      if (meta.assignee) pillsHtml += '<span class="pill pill-a">&#9876; ' + meta.assignee + '</span>';
+      if (meta.timeframe) {
+        var tlbl = {'1-2h':'1-2h','half-day':'½d','1d':'1d','2-3d':'2-3d','1w':'1wk','2w':'2wk','1m':'1mo','ongoing':'∞'}[meta.timeframe] || meta.timeframe;
+        pillsHtml += '<span class="pill pill-t">&#9719; ' + tlbl + '</span>';
+      }
+      h += '<div class="task ' + ts + '" onclick="openDrawer(\'' + ph.id + '\',\'' + gEnc + '\',\'' + tEnc + '\')">'
+         + '<div class="task-chk" onclick="event.stopPropagation();toggleTask(\'' + ph.id + '\',\'' + gEnc + '\',\'' + tEnc + '\')">' + ico + '</div>'
+         + '<div class="task-name">' + escHtml(tname) + '</div>'
+         + '<div class="task-pills">' + pillsHtml + '</div>'
+         + '<button class="task-sbtn ' + scls + '" onclick="event.stopPropagation();cycleStatus(\'' + ph.id + '\',\'' + gEnc + '\',\'' + tEnc + '\')">' + slbl + '</button>'
+         + '</div>';
+    });
+
+    // Add task row
+    h += '<div class="add-row">'
+       + '<input class="add-inp" type="text" placeholder="Add task to ' + g.name + '&#8230;" id="ai-' + ph.id + '-' + gEnc + '" onkeydown="if(event.key===\'Enter\')addTask(\'' + ph.id + '\',\'' + gEnc + '\')">'
+       + '<button class="add-btn" onclick="addTask(\'' + ph.id + '\',\'' + gEnc + '\')">+ Add</button></div>';
+
+    h += '</div>'; // tgroup
+  });
+
+  // Phase notes
+  var noteVal = STATE[noteKey(ph.id)] || '';
+  h += '<div class="notes-sec"><div class="notes-lbl">Phase Notes</div>'
+     + '<textarea class="notes-ta" placeholder="Notes, blockers, decisions&#8230;" onchange="saveNote(\'' + ph.id + '\',this.value)">' + escHtml(noteVal) + '</textarea></div>';
+
+  return h;
 }
 
-// ─── ACTIONS ────────────────────────────────────────────────────────────────
-function show(id) {
-currentId = id;
-$('main-content').innerHTML = id === 'overview' ? renderOverview() : renderPhase(PHASES.find(p => p.id === id));
-renderSidebar(id);
-updateStats();
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function updateStats() {
-const s = allStats(), p = s.total ? Math.round(s.done / s.total * 100) : 0;
-$('stat-done').textContent = s.done;
-$('stat-inprog').textContent = s.inprog;
-$('stat-total').textContent = s.total;
-$('global-fill').style.width = p + '%';
-$('global-pct').textContent = p + '%';
+// ═══════════════════════════════════════════════════════════════════════════
+//  TASK ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleTask(pid, gEnc, tEnc) {
+  var g    = decodeURIComponent(gEnc);
+  var name = decodeURIComponent(tEnc);
+  var cur  = getStatus(pid, g, name);
+  var patch = {};
+  var k     = metaKey(pid, g, name);
+  var meta  = getMeta(pid, g, name);
+  patch[k]  = Object.assign({}, meta, { status: cur === 'done' ? 'todo' : 'done' });
+  saveState(patch);
 }
 
-async function doToggle(pid, ge, te) {
-const g = decodeURIComponent(ge), t = decodeURIComponent(te);
-await setMeta(pid, g, t, { status: getS(pid, g, t) === 'done' ? 'todo' : 'done' });
+function cycleStatus(pid, gEnc, tEnc) {
+  var g    = decodeURIComponent(gEnc);
+  var name = decodeURIComponent(tEnc);
+  var cur  = getStatus(pid, g, name);
+  var next = { todo:'inprogress', inprogress:'review', review:'done', done:'blocked', blocked:'todo' }[cur] || 'todo';
+  var patch = {};
+  patch[metaKey(pid, g, name)] = Object.assign({}, getMeta(pid, g, name), { status: next });
+  saveState(patch);
 }
 
-async function doCyc(pid, ge, te) {
-const g = decodeURIComponent(ge), t = decodeURIComponent(te);
-await setMeta(pid, g, t, { status: cyc(getS(pid, g, t)) });
+function addTask(pid, gEnc) {
+  var g   = decodeURIComponent(gEnc);
+  var inp = document.getElementById('ai-' + pid + '-' + gEnc);
+  if (!inp) return;
+  var val = inp.value.trim();
+  if (!val) return;
+  var ck      = customKey(pid, g);
+  var existing = STATE[ck] || {};
+  var idx     = Object.keys(existing).length;
+  var patch   = {};
+  patch[ck]   = Object.assign({}, existing);
+  patch[ck][String(idx)] = val;
+  saveState(patch);
+  inp.value = '';
 }
 
-async function doAdd(pid, ge) {
-const g = decodeURIComponent(ge), inp = $('ni-' + pid + '-' + ge);
-if (!inp) return;
-const v = inp.value.trim(); if (!v) return;
-const ck = '__custom__' + pid + '__' + g, existing = state[ck] || {}, idx = Object.keys(existing).length, patch = {};
-patch[ck] = { ...existing, [idx]: v };
-await persist(patch);
-inp.value = '';
+function saveNote(pid, val) {
+  var patch = {};
+  patch[noteKey(pid)] = val;
+  saveState(patch);
 }
 
-async function doNote(pid, val) {
-const patch = {};
-patch['__note__' + pid] = val;
-await persist(patch);
-}
+// ═══════════════════════════════════════════════════════════════════════════
+//  DRAWER
+// ═══════════════════════════════════════════════════════════════════════════
+var STATUS_LIST = ['todo','inprogress','review','done','blocked'];
+var STATUS_LBL  = { todo:'To Do', inprogress:'In Progress', review:'Review', done:'Done', blocked:'Blocked' };
 
-// ─── DRAWER ─────────────────────────────────────────────────────────────────
-const STATUSES = ['todo','inprogress','review','done','blocked'];
-const SNAMES = { todo:'To Do', inprogress:'In Progress', review:'Review', done:'Done', blocked:'Blocked' };
+function openDrawer(pid, gEnc, tEnc) {
+  var g    = decodeURIComponent(gEnc);
+  var name = decodeURIComponent(tEnc);
+  dCtx     = { pid:pid, group:g, taskName:name };
 
-function openDrawer(pid, ge, te) {
-const g = decodeURIComponent(ge), t = decodeURIComponent(te);
-dCtx = { pid, g, t };
-const meta = getMeta(pid, g, t), ph = PHASES.find(p => p.id === pid);
-$('dPhaseTag').textContent = 'Phase ' + (ph?.num || '') + ' — ' + (ph?.title || '');
-$('dTaskNameDisplay').textContent = t;
-$('dTaskName').value = t;
-$('dAssignee').value = meta.assignee || '';
-$('dTimeframe').value = meta.timeframe || '';
-$('dNotes').value = meta.notes || '';
-dStatus = meta.status || 'todo';
-renderStatusChips();
-$('drawerOverlay').classList.add('open');
-$('drawer').classList.add('open');
+  var ph   = PHASES.find(function(p){ return p.id === pid; });
+  var meta = getMeta(pid, g, name);
+
+  document.getElementById('dTag').textContent  = 'Phase ' + (ph ? ph.num : '') + ' — ' + (ph ? ph.title : '');
+  document.getElementById('dName').textContent = name;
+  document.getElementById('dInpName').value    = name;
+  document.getElementById('dInpAssign').value  = meta.assignee  || '';
+  document.getElementById('dInpTime').value    = meta.timeframe || '';
+  document.getElementById('dInpNotes').value   = meta.notes     || '';
+
+  dSelStatus = meta.status || 'todo';
+  renderStatusChips();
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+  setTimeout(function(){ document.getElementById('dInpName').focus(); }, 260);
 }
 
 function closeDrawer() {
-$('drawerOverlay').classList.remove('open');
-$('drawer').classList.remove('open');
-dCtx = null;
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  dCtx = null;
 }
 
 function renderStatusChips() {
-$('dStatusRow').innerHTML = STATUSES.map(s =>
-`<div class="status-chip chip-${s}${dStatus === s ? ' sel' : ''}" onclick="APP.selStatus('${s}')">${SNAMES[s]}</div>`
-).join('');
+  var html = STATUS_LIST.map(function(s) {
+    return '<div class="schip schip-' + s + (dSelStatus===s ? ' sel' : '') + '" onclick="selectStatus(\'' + s + '\')">' + STATUS_LBL[s] + '</div>';
+  }).join('');
+  document.getElementById('dStatus').innerHTML = html;
 }
 
-function selStatus(s) { dStatus = s; renderStatusChips(); }
+function selectStatus(s) { dSelStatus = s; renderStatusChips(); }
 
-async function saveDrawer() {
-if (!dCtx) return;
-const { pid, g, t } = dCtx;
-const newName = ($('dTaskName').value || '').trim() || t;
-const meta = {
-status: dStatus,
-assignee: $('dAssignee').value.trim(),
-timeframe: $('dTimeframe').value,
-notes: $('dNotes').value.trim(),
-};
+function saveDrawer() {
+  if (!dCtx) return;
+  var pid     = dCtx.pid;
+  var grp     = dCtx.group;
+  var oldName = dCtx.taskName;
+  var newName = document.getElementById('dInpName').value.trim() || oldName;
+  var patch   = {};
 
-if (newName !== t) {
-const patch = {};
-patch[fk(pid, g, newName)] = { ...getMeta(pid, g, t), ...meta };
-patch[fk(pid, g, t)] = null;
+  // ── Build updated meta ──────────────────────────────────────────────────
+  var newMeta = Object.assign({}, getMeta(pid, grp, oldName), {
+    status:    dSelStatus,
+    assignee:  document.getElementById('dInpAssign').value.trim(),
+    timeframe: document.getElementById('dInpTime').value,
+    notes:     document.getElementById('dInpNotes').value.trim()
+  });
 
-const ck = '__custom__' + pid + '__' + g;
-const rk = '__renames__' + pid + '__' + g;
+  // ── Handle rename ───────────────────────────────────────────────────────
+  if (newName !== oldName) {
+    // Move meta to new key, clear old key
+    patch[metaKey(pid, grp, newName)] = newMeta;
+    patch[metaKey(pid, grp, oldName)] = null;
 
-if (state[ck]) {
-const custom = { ...state[ck] };
-const entry = Object.entries(custom).find(([, v]) => v === t);
-if (entry) {
-custom[entry[0]] = newName;
-patch[ck] = custom;
-}
-} else {
-const renames = { ...(state[rk] || {}) };
-let found = false;
-for (const [orig, renamed] of Object.entries(renames)) {
-if (renamed === t) {
-renames[orig] = newName;
-found = true;
-break;
-}
-}
-if (!found) renames[t] = newName;
-patch[rk] = renames;
-}
+    // Check if oldName was a custom task
+    var ck     = customKey(pid, grp);
+    var custom = STATE[ck] ? Object.assign({}, STATE[ck]) : null;
+    var custEntry = null;
+    if (custom) {
+      Object.keys(custom).forEach(function(idx) {
+        if (custom[idx] === oldName) custEntry = idx;
+      });
+    }
 
-await persist(patch);
-} else {
-await setMeta(pid, g, t, meta);
-}
+    if (custEntry !== null) {
+      // Rename in custom list
+      custom[custEntry] = newName;
+      patch[ck] = custom;
+    } else {
+      // Built-in task: find its true original name (before any prior renames)
+      var rk      = renameKey(pid, grp);
+      var renames = STATE[rk] ? Object.assign({}, STATE[rk]) : {};
+      var origKey = b64(oldName); // default: oldName is the original
+      // Check if oldName itself was already a renamed version
+      Object.keys(renames).forEach(function(ob64) {
+        if (renames[ob64] === oldName) origKey = ob64;
+      });
+      renames[origKey] = newName;
+      patch[rk] = renames;
+    }
+  } else {
+    patch[metaKey(pid, grp, oldName)] = newMeta;
+  }
 
-closeDrawer();
-show(currentId);
-toast('Task updated');
-}
-
-async function deleteTask() {
-if (!dCtx) {
-console.error("deleteTask: dCtx is null");
-toast("Cannot delete – internal error");
-return;
-}
-
-const { pid, g, t } = dCtx;
-console.log("deleteTask called for:", { phase: pid, group: g, task: t });
-
-if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
-
-const patch = {};
-
-// Remove task metadata
-const taskKey = fk(pid, g, t);
-patch[taskKey] = null;
-
-// Handle custom task removal
-const ck = '__custom__' + pid + '__' + g;
-if (state[ck]) {
-const custom = { ...state[ck] };
-const entry = Object.entries(custom).find(([, value]) => value === t);
-if (entry) {
-console.log("Removing custom task at index:", entry[0]);
-delete custom[entry[0]];
-patch[ck] = Object.keys(custom).length ? custom : null;
-}
+  saveState(patch);
+  closeDrawer();
+  toast('Task updated');
 }
 
-// Handle built-in / renamed task deletion
-const rk = '__renames__' + pid + '__' + g;
-const dk = '__deleted__' + pid + '__' + g;
-const renames = state[rk] || {};
-let originalName = t;
+// ═══════════════════════════════════════════════════════════════════════════
+//  DELETE TASK
+//  Strategy: for built-in tasks we store the original (pre-rename) b64 key
+//  in a "deleted" object under pipeline/state. Firebase KEEPS object keys
+//  with boolean values, so they survive round-trips (unlike null sentinels).
+//  resolveGroup() checks this set before rendering.
+// ═══════════════════════════════════════════════════════════════════════════
+function deleteTask() {
+  if (!dCtx) return;
+  var pid       = dCtx.pid;
+  var grp       = dCtx.group;
+  var taskName  = dCtx.taskName;
 
-// Find original name if renamed
-for (const [orig, renamed] of Object.entries(renames)) {
-if (renamed === t) {
-originalName = orig;
-break;
+  if (!confirm('Permanently delete "' + taskName + '"?\nThis cannot be undone.')) return;
+
+  var avEl = document.getElementById('collabAv');
+  if (avEl && avEl.children.length > 1) {
+    if (!confirm('Multiple people are online.\nDelete for everyone?')) return;
+  }
+
+  var patch = {};
+
+  // Remove meta for this name and any previous names
+  patch[metaKey(pid, grp, taskName)] = null;
+
+  var ck      = customKey(pid, grp);
+  var rk      = renameKey(pid, grp);
+  var dk      = deletedKey(pid, grp);
+  var custom  = STATE[ck] ? Object.assign({}, STATE[ck]) : null;
+  var renames = STATE[rk] ? Object.assign({}, STATE[rk]) : {};
+  var deleted = STATE[dk] ? Object.assign({}, STATE[dk]) : {};
+
+  // Find if it is a custom task
+  var custIdx = null;
+  if (custom) {
+    Object.keys(custom).forEach(function(i) {
+      if (custom[i] === taskName) custIdx = i;
+    });
+  }
+
+  if (custIdx !== null) {
+    // Custom task: just remove from list
+    delete custom[custIdx];
+    patch[ck] = Object.keys(custom).length > 0 ? custom : null;
+  } else {
+    // Built-in task: find its original name key (before renames)
+    var origB64 = b64(taskName); // assume original unless we find a rename entry
+    Object.keys(renames).forEach(function(ob64) {
+      if (renames[ob64] === taskName) origB64 = ob64;
+    });
+
+    // Mark original b64 key as deleted
+    deleted[origB64] = true;
+    patch[dk] = deleted;
+
+    // Also mark the current (possibly renamed) b64 key as deleted
+    var curB64 = b64(taskName);
+    if (curB64 !== origB64) deleted[curB64] = true;
+
+    // Clean up rename entry if it exists
+    if (renames[origB64] !== undefined) {
+      delete renames[origB64];
+      patch[rk] = Object.keys(renames).length > 0 ? renames : null;
+    }
+  }
+
+  saveState(patch);
+  closeDrawer();
+  toast('Task deleted');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TOASTS
+// ═══════════════════════════════════════════════════════════════════════════
+function toast(msg, dur) {
+  dur = dur || 2600;
+  var c  = document.getElementById('toasts');
+  var el = document.createElement('div');
+  el.className   = 'toast';
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(function() {
+    el.classList.add('out');
+    setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 380);
+  }, dur);
 }
 
-// Clean up rename entry
-if (state[rk]) {
-const newRenames = { ...renames };
-if (newRenames[originalName]) {
-delete newRenames[originalName];
-patch[rk] = Object.keys(newRenames).length ? newRenames : null;
-}
-}
-
-// Mark as deleted (use object key for Firebase compatibility)
-const existingDeleted = state[dk] || {};
-patch[dk] = { ...existingDeleted, [originalName]: true };
-
-console.log("Delete patch:", patch);
-
-try {
-await persist(patch);
-console.log("Delete successful");
-closeDrawer();
-show(currentId);
-toast('🗑 Task permanently deleted');
-} catch (err) {
-console.error("Delete failed:", err);
-toast('Delete failed – check console');
-}
-}
-
-window.APP = {
-show,
-openDrawer,
-closeDrawer,
-doToggle,
-doCyc,
-doAdd,
-doNote,
-selStatus,
-saveDrawer,
-deleteTask
-};
-
-function boot() {
-renderSidebar('overview');
-show('overview');
-initFirebase();
-}
-
-if (document.readyState === 'loading') {
-document.addEventListener('DOMContentLoaded', boot);
+// ═══════════════════════════════════════════════════════════════════════════
+//  BOOT — wait for DOM, then render immediately and connect Firebase
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+  renderAll();        // render with empty STATE so UI appears immediately
+  initFirebase();     // connect + start live sync
+});
+</script>
+</body>
+</html>
