@@ -165,7 +165,9 @@
   .drawer.open { transform:translateX(0); }
   .drawer-header { padding:1.5rem 1.5rem 1rem; border-bottom:1px solid var(--border); background:linear-gradient(180deg,var(--surface2),var(--surface)); position:sticky; top:0; z-index:1; }
   .drawer-phase-tag { font-family:'Cinzel',serif; font-size:0.58rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--red-dim); margin-bottom:0.35rem; }
-  .drawer-task-name { font-family:'Cinzel',serif; font-size:0.95rem; color:var(--text-bright); line-height:1.45; margin-bottom:1rem; padding-right:2rem; }
+  .drawer-task-name-input { font-family:'Cinzel',serif; font-size:0.95rem; color:var(--text-bright); line-height:1.45; margin-bottom:1rem; background:transparent; border:none; border-bottom:1px solid var(--border); outline:none; width:100%; padding:0.25rem 2rem 0.25rem 0; transition:border-color 0.2s; }
+  .drawer-task-name-input:focus { border-bottom-color:var(--red-dim); }
+  .drawer-task-name-input::placeholder { color:var(--text-dim); font-style:italic; }
   .drawer-status-row { display:flex; gap:0.4rem; flex-wrap:wrap; }
   .status-chip { font-family:'Cinzel',serif; font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; padding:0.28rem 0.65rem; border:1px solid var(--border); border-radius:2px; cursor:pointer; transition:all 0.15s; color:var(--text-dim); user-select:none; }
   .chip-todo.sel      { background:rgba(122,106,80,0.2); border-color:var(--text-dim); color:var(--text-bright); }
@@ -254,7 +256,7 @@
   <button class="drawer-close-btn" onclick="APP.closeDrawer()">✕</button>
   <div class="drawer-header">
     <div class="drawer-phase-tag" id="dPhaseTag"></div>
-    <div class="drawer-task-name" id="dTaskName"></div>
+    <input class="drawer-task-name-input" id="dTaskName" placeholder="Task nameâ¦" autocomplete="off">
     <div class="drawer-status-row" id="dStatusRow"></div>
   </div>
   <div class="drawer-body">
@@ -704,7 +706,7 @@
     dCtx = { pid, g, t };
     const meta=getMeta(pid,g,t), ph=PHASES.find(p=>p.id===pid);
     $('dPhaseTag').textContent  = 'Phase '+(ph?.num||'')+' — '+(ph?.title||'');
-    $('dTaskName').textContent  = t;
+    $('dTaskName').value        = t;
     $('dAssignee').value        = meta.assignee || '';
     $('dTimeframe').value       = meta.timeframe || '';
     $('dNotes').value           = meta.notes || '';
@@ -732,14 +734,29 @@
   async function saveDrawer() {
     if (!dCtx) return;
     const { pid, g, t } = dCtx;
-    await setMeta(pid, g, t, {
+    const newName = ($('dTaskName').value || '').trim() || t;
+    const meta = {
       status:    dStatus,
       assignee:  $('dAssignee').value.trim(),
       timeframe: $('dTimeframe').value,
       notes:     $('dNotes').value.trim(),
-    });
+    };
+    if (newName !== t) {
+      const patch = {};
+      patch[fk(pid, g, newName)] = { ...getMeta(pid, g, t), ...meta };
+      patch[fk(pid, g, t)]       = null;
+      const ck = '__custom__' + pid + '__' + g;
+      if (state[ck]) {
+        const custom = { ...state[ck] };
+        const entry  = Object.entries(custom).find(([, v]) => v === t);
+        if (entry) { custom[entry[0]] = newName; patch[ck] = custom; }
+      }
+      await persist(patch);
+    } else {
+      await setMeta(pid, g, t, meta);
+    }
     closeDrawer();
-    toast('✦ Task updated');
+    toast('❆ Task updated');
   }
 
   // Expose to window for inline onclick handlers
