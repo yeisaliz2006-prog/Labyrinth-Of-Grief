@@ -191,6 +191,8 @@
   .drawer-save:hover { background:var(--red); color:var(--bg); }
   .drawer-cancel { padding:0.65rem 1rem; background:none; border:1px solid var(--border); color:var(--text-dim); font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; border-radius:3px; transition:all 0.15s; }
   .drawer-cancel:hover { border-color:var(--text-dim); color:var(--text); }
+  .drawer-delete { padding:0.65rem 1rem; background:none; border:1px solid var(--red-dim); color:var(--red-dim); font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; border-radius:3px; transition:all 0.15s; }
+  .drawer-delete:hover { background:rgba(160,26,26,0.2); border-color:var(--red-bright); color:var(--red-bright); }
   .drawer-close-btn { position:absolute; top:1rem; right:1rem; background:none; border:1px solid var(--border); color:var(--text-dim); width:26px; height:26px; border-radius:2px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center; transition:all 0.15s; z-index:2; }
   .drawer-close-btn:hover { border-color:var(--red-dim); color:var(--text); }
 
@@ -298,6 +300,7 @@
 
   </div>
   <div class="drawer-footer">
+    <button class="drawer-delete" onclick="APP.deleteTask()">Delete Task</button>
     <button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
     <button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
   </div>
@@ -547,7 +550,7 @@
       // Apply renames: built-in tasks may have a renamed version stored in state
       const rk = '__renames__' + ph.id + '__' + g.name;
       const renames = state[rk] || {};
-      const baseTasks = g.tasks.map(t => renames[t] || t);
+      const baseTasks = g.tasks.map(t => renames[t] || t).filter(t => t !== '__DELETED__');
       const all = [...baseTasks, ...custom];
       for (const t of all) { to++; const s=getS(ph.id,g.name,t); if(s==='done')d++; else if(s==='inprogress')i++; }
     }
@@ -632,7 +635,7 @@
       // Apply renames: built-in tasks may have a renamed version stored in state
       const rk = '__renames__' + ph.id + '__' + g.name;
       const renames = state[rk] || {};
-      const baseTasks = g.tasks.map(t => renames[t] || t);
+      const baseTasks = g.tasks.map(t => renames[t] || t).filter(t => t !== '__DELETED__');
       const all = [...baseTasks, ...custom];
       const gd = all.filter(t => getS(ph.id,g.name,t)==='done').length;
       const ge = encodeURIComponent(g.name);
@@ -798,7 +801,42 @@
   }
 
   // Expose to window for inline onclick handlers
-  window.APP = { show, openDrawer, closeDrawer, doToggle, doCyc, doAdd, doNote, selStatus, saveDrawer };
+  async function deleteTask() {
+    if (!dCtx) return;
+    const { pid, g, t } = dCtx;
+    if (!confirm('Delete "' + t + '"? This cannot be undone.')) return;
+
+    const patch = {};
+    // Remove meta for this task
+    patch[fk(pid, g, t)] = null;
+
+    const ck = '__custom__' + pid + '__' + g;
+    const rk = '__renames__' + pid + '__' + g;
+
+    // If it's a custom task, remove from custom list
+    if (state[ck]) {
+      const custom = { ...state[ck] };
+      const entry = Object.entries(custom).find(([, v]) => v === t);
+      if (entry) {
+        delete custom[entry[0]];
+        patch[ck] = Object.keys(custom).length ? custom : null;
+      }
+    }
+
+    // If it's a built-in task, mark it as deleted in renames using a sentinel
+    const renames = { ...(state[rk] || {}) };
+    // Find original key (could be t itself or a key whose rename === t)
+    const origKey = Object.entries(renames).find(([, v]) => v === t)?.[0] || t;
+    renames[origKey] = '__DELETED__';
+    patch[rk] = renames;
+
+    await persist(patch);
+    closeDrawer();
+    show(currentId);
+    toast('✗ Task deleted');
+  }
+
+  window.APP = { show, openDrawer, closeDrawer, doToggle, doCyc, doAdd, doNote, selStatus, saveDrawer, deleteTask };
 
   // ════════════════════════════════════
   //  BOOT
