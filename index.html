@@ -544,7 +544,11 @@
     for (const g of ph.groups) {
       const ck = '__custom__' + ph.id + '__' + g.name;
       const custom = state[ck] ? Object.values(state[ck]) : [];
-      const all = [...g.tasks, ...custom];
+      // Apply renames: built-in tasks may have a renamed version stored in state
+      const rk = '__renames__' + ph.id + '__' + g.name;
+      const renames = state[rk] || {};
+      const baseTasks = g.tasks.map(t => renames[t] || t);
+      const all = [...baseTasks, ...custom];
       for (const t of all) { to++; const s=getS(ph.id,g.name,t); if(s==='done')d++; else if(s==='inprogress')i++; }
     }
     return { done:d, inprog:i, total:to };
@@ -625,7 +629,11 @@
     for (const g of ph.groups) {
       const ck = '__custom__' + ph.id + '__' + g.name;
       const custom = state[ck] ? Object.values(state[ck]) : [];
-      const all = [...g.tasks, ...custom];
+      // Apply renames: built-in tasks may have a renamed version stored in state
+      const rk = '__renames__' + ph.id + '__' + g.name;
+      const renames = state[rk] || {};
+      const baseTasks = g.tasks.map(t => renames[t] || t);
+      const all = [...baseTasks, ...custom];
       const gd = all.filter(t => getS(ph.id,g.name,t)==='done').length;
       const ge = encodeURIComponent(g.name);
       h += `<div class="task-group"><div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
@@ -751,19 +759,41 @@
     };
     if (newName !== t) {
       const patch = {};
+      // Copy meta from old key to new key
       patch[fk(pid, g, newName)] = { ...getMeta(pid, g, t), ...meta };
       patch[fk(pid, g, t)]       = null;
+
       const ck = '__custom__' + pid + '__' + g;
-      if (state[ck]) {
-        const custom = { ...state[ck] };
-        const entry  = Object.entries(custom).find(([, v]) => v === t);
-        if (entry) { custom[entry[0]] = newName; patch[ck] = custom; }
+      const rk = '__renames__' + pid + '__' + g;
+
+      // Check if it's a user-added (custom) task
+      const customList = state[ck] ? { ...state[ck] } : null;
+      const customEntry = customList && Object.entries(customList).find(([, v]) => v === t);
+
+      if (customEntry) {
+        // It's a custom task — update the custom list
+        customList[customEntry[0]] = newName;
+        patch[ck] = customList;
+      } else {
+        // It's a built-in task — store the rename in __renames__
+        const currentRenames = { ...(state[rk] || {}) };
+        // Remove any previous entry that pointed to t (in case t itself was already renamed)
+        for (const [orig, renamed] of Object.entries(currentRenames)) {
+          if (renamed === t) { currentRenames[orig] = newName; }
+        }
+        // If t wasn't already a renamed value, add a direct mapping
+        if (!Object.values(currentRenames).includes(newName)) {
+          currentRenames[t] = newName;
+        }
+        patch[rk] = currentRenames;
       }
+
       await persist(patch);
     } else {
       await setMeta(pid, g, t, meta);
     }
     closeDrawer();
+    show(currentId);
     toast('❆ Task updated');
   }
 
