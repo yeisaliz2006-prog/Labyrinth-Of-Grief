@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -167,6 +168,911 @@ textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
 <div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</span></div>
 </div>
 </header>
+<div class="progress-bar-wrap">
+<span class="progress-label">Overall Progress</span>
+<div class="progress-track"><div class="progress-fill" id="global-fill" style="width:0%"></div></div>
+<span class="progress-pct" id="global-pct">0%</span>
+</div>
+<div class="collab-bar">
+<span class="collab-label">Online</span>
+<div class="collab-avatars" id="collabAvatars"></div>
+<span class="last-sync" id="lastSync">&#8212;</span>
+</div>
+<div class="container">
+<nav class="sidebar" id="sidebar"></nav>
+<div class="main-content" id="main-content"></div>
+</div>
+
+<!-- DRAWER -->
+
+<div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
+<div class="drawer" id="drawer">
+<button class="drawer-close-btn" onclick="APP.closeDrawer()">&#x2715;</button>
+<div class="drawer-header">
+<div class="drawer-phase-tag" id="dPhaseTag"></div>
+<div class="drawer-task-name" id="dTaskNameDisplay"></div>
+<div class="drawer-status-row" id="dStatusRow"></div>
+</div>
+<div class="drawer-body">
+<div class="drawer-field">
+<label class="drawer-label">&#x270E; Task Name</label>
+<input class="di" id="dTaskName" placeholder="Task name&#8230;" autocomplete="off">
+</div>
+<div class="drawer-field">
+<label class="drawer-label">&#x2694; Assignee</label>
+<input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
+</div>
+<div class="drawer-field">
+<label class="drawer-label">&#x25F7; Estimated Timeframe</label>
+<select class="di" id="dTimeframe">
+<option value="">&#8212; Select estimate &#8212;</option>
+<option value="1-2h">1&#8211;2 hours</option>
+<option value="half-day">Half day</option>
+<option value="1d">1 day</option>
+<option value="2-3d">2&#8211;3 days</option>
+<option value="1w">~1 week</option>
+<option value="2w">~2 weeks</option>
+<option value="1m">~1 month</option>
+<option value="ongoing">Ongoing</option>
+</select>
+</div>
+<div class="drawer-field">
+<label class="drawer-label">&#x2726; Notes &amp; Details</label>
+<textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links&#8230;"></textarea>
+</div>
+</div>
+<div class="drawer-footer">
+<div class="drawer-footer-actions">
+<button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
+<button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
+</div>
+<button class="drawer-delete" onclick="APP.deleteTask()"><span style="color:var(--red-bright)">&#x1F5D1; Permanently Delete</span></button>
+</div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
+authDomain: "labyrinth-of-grief-6a2e2.firebaseapp.com",
+databaseURL: "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
+projectId: "labyrinth-of-grief-6a2e2",
+storageBucket: "labyrinth-of-grief-6a2e2.firebasestorage.app",
+messagingSenderId: "148640942330",
+appId: "1:148640942330:web:8f091f07193cd434bba143"
+};
+
+// ─── PHASES ──────────────────────────────────────────────────────────────────
+const PHASES = [
+{ id:'overview', num:'&#x2605;', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
+
+{ id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
+{ name:'Concept & Vision', tasks:[
+'Game Title and Tagline',
+'One-Page Concept Document',
+'Target Platform',
+'Emotional Arc',
+'Core Narrative Premise',
+]},
+{ name:'Level Concepts', tasks:[
+'Level 1 Concept',
+'Level 2 Concept',
+'Level 3 Concept',
+'Intermission Scene Concept',
+'Emotional Transition Beats',
+]},
+{ name:'References & Moodboards', tasks:[
+'Level 1 Moodboard',
+'Level 2 Moodboard',
+'Level 3 Moodboard',
+'Player Movement References',
+'Level Design References',
+]},
+{ name:'Narrative Design', tasks:[
+'Amnesia Arc Structure',
+'Dog Rescue Payoff Moments',
+'Village NPC Design',
+'Boss Lore Content',
+'Ending Sequence Script',
+]},
+]},
+
+{ id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design', groups:[
+{ name:'Level Design Documents', tasks:[
+'Level 1 Design Document',
+'Level 2 Design Document',
+'Level 3 Design Document',
+'Secrets and Collectibles Map',
+'Puzzle Solutions Document',
+]},
+{ name:'Enemy Design', tasks:[
+'Standard Enemy',
+'Siege Enemy',
+'Echo Enemy',
+'Statue Enemy',
+'Light Guardian',
+'Ravager',
+'Level 1 Boss',
+'Level 2 Boss',
+'Level 3 Boss',
+]},
+{ name:'Puzzle Design', tasks:[
+'Level 1 Gate Puzzle',
+'Level 1 Wall Charge Puzzle',
+'Level 1 Boss Grapple Puzzle',
+'Level 2 Seesaw Launch Puzzle',
+'Level 2 Skull Weight Puzzle',
+'Level 2 Pressure Button Puzzle',
+'Level 2 Demolition Path Puzzles',
+'Level 3 Bell Sequence Puzzle',
+'Level 3 Swarm Redirect Puzzle',
+'Level 3 Boss Shield Puzzle',
+]},
+{ name:'Pacing & Progression', tasks:[
+'Ability Unlock Order',
+'Checkpoint Placement',
+'Tension and Relief Rhythm',
+'Optional vs Required Content Balance',
+]},
+]},
+
+{ id:'blockout', num:'03', title:'Blockout / Greybox', subtitle:'First Playable Version', groups:[
+{ name:'Level 1 Blockout', tasks:[
+'Level 1 Room Layout',
+'Level 1 Grapple Range Test',
+'Level 1 Enemy Placement',
+'Level 1 Boss Arena Test',
+'Level 1 Puzzle Validation',
+]},
+{ name:'Level 2 Blockout', tasks:[
+'Level 2 Cavern Geometry',
+'Level 2 Seesaw Physics Test',
+'Level 2 Key-Path Routes',
+'Level 2 Destructible Collision Test',
+'Level 2 Boss Arena Validation',
+]},
+{ name:'Level 3 Blockout', tasks:[
+'Level 3 Vertical Scale Test',
+'Level 3 Bat Grapple Points',
+'Level 3 Bell Tower Layout',
+'Level 3 Aerial Gap Test',
+'Level 3 Boss Arena Validation',
+]},
+{ name:'Core Feel Validation', tasks:[
+'Player Movement Feel',
+'Grapple Hook Feel',
+'Enemy Detection Debug',
+'Sound Radius Visualisation',
+'Checkpoint and Respawn Test',
+]},
+]},
+
+{ id:'art', num:'04', title:'Art Production', subtitle:'Concept, 3D, Texture, Animation', groups:[
+{ name:'Concept Art', tasks:[
+'Protagonist Concept',
+'Companion Dog Concept',
+'Level 1 Boss Concept',
+'Goblin Concepts',
+'Skeleton Enemy Concept',
+'Bat Enemy Concepts',
+'Level 3 Boss Concept',
+'Level 1 Environment Concept',
+'Level 2 Environment Concept',
+'Level 3 Environment Concept',
+'Key Props Concept',
+]},
+{ name:'3D Modeling - Characters', tasks:[
+'Protagonist Model',
+'Level 1 Boss Model',
+'Goblin Models',
+'Skeleton Enemy Model',
+'Bat Enemy Models',
+'Level 3 Boss Model',
+'Companion Dog Model',
+]},
+{ name:'3D Modeling - Environment', tasks:[
+'Level 1 Modular Tile Kit',
+'Level 2 Modular Tile Kit',
+'Level 3 Modular Tile Kit',
+'Goblin Structure Props',
+'Interactive Props',
+'Destructible Structure Variants',
+]},
+{ name:'UV Mapping & Texturing', tasks:[
+'Character UV Unwrap',
+'Character Base Color Maps',
+'Character Normal Maps',
+'Character Roughness and Metallic Maps',
+'Environment Tileset Textures',
+'Props Textures',
+]},
+{ name:'Rigging & Animation', tasks:[
+'Protagonist Rig',
+'Protagonist Animations',
+'Level 1 Boss Animations',
+'Goblin Animations',
+'Skeleton Animations',
+'Standard Bat Animations',
+'Giant Bat Animations',
+'Level 3 Boss Animations',
+]},
+]},
+
+{ id:'integration', num:'05', title:'Engine Integration', subtitle:'Importing & Engine Setup', groups:[
+{ name:'Asset Import Pipeline', tasks:[
+'Project Folder Structure',
+'Character Import and Scale Check',
+'Environment Tile Import',
+'Props Import and Collision',
+'PBR Material Setup',
+]},
+{ name:'Physics & Collision', tasks:[
+'Player Controller',
+'Grapple System',
+'Seesaw Physics',
+'Destructible Breakpoints',
+'Bat Ride Physics',
+'Level 3 Wind Volumes',
+]},
+{ name:'Animation Integration', tasks:[
+'Protagonist Animator',
+'Enemy Animators',
+'Boss Animators',
+'Movement Blend Trees',
+'Animation Event Triggers',
+]},
+]},
+
+{ id:'programming', num:'06', title:'Programming / Systems', subtitle:'Core Code & AI', groups:[
+{ name:'Core Mechanics', tasks:[
+'Grappling Hook System',
+'Grapple Combat Interactions',
+'Stealth System',
+'Sound Radius System',
+'Shadow Detection System',
+]},
+{ name:'Enemy AI', tasks:[
+'Standard Enemy AI',
+'Siege Enemy AI',
+'Echo Enemy AI',
+'Statue Enemy AI',
+'Light Guardian AI',
+'Ravager AI',
+]},
+{ name:'Boss Logic', tasks:[
+'Level 1 Boss AI',
+'Level 2 Boss Phase 1',
+'Level 2 Boss Phase 2',
+'Level 2 Boss Phase 3',
+'Level 3 Boss Phase 1',
+'Level 3 Boss Phase 2',
+'Level 3 Boss Phase 3',
+]},
+{ name:'Level 3 Sound System', tasks:[
+'Noise Event Emitter',
+'Bat Swarm Trigger',
+'Swarm Platform System',
+'Enemy Shield Disruption',
+'Hidden Path Reveal',
+]},
+{ name:'Game Systems', tasks:[
+'Health System',
+'Checkpoint System',
+'Key and Lock System',
+'Collectibles Tracker',
+'HUD',
+'Pause Menu and Settings',
+'Save and Load System',
+]},
+]},
+
+{ id:'lighting', num:'07', title:'Lighting & Atmosphere', subtitle:'VFX, Sound, Music', groups:[
+{ name:'Lighting', tasks:[
+'Level 1 Lighting',
+'Level 2 Lighting',
+'Level 3 Lighting',
+'Dynamic Shadow Pass',
+'Boss Arena Lighting',
+'Secret Room Lighting',
+]},
+{ name:'Visual FX', tasks:[
+'Grapple VFX',
+'Impact Particles',
+'Bat Swarm Particles',
+'Wind VFX',
+'Enemy Alert VFX',
+'Sound Wave VFX',
+'Destruction Particles',
+'Ending Light Shaft VFX',
+]},
+{ name:'Ambient Sound Design', tasks:[
+'Level 1 Ambient Audio',
+'Level 2 Ambient Audio',
+'Level 3 Ambient Audio',
+'Player Breathing Layer',
+'Companion Dog Audio',
+'Enemy Footsteps',
+'Echo Enemy Audio',
+]},
+{ name:'Music', tasks:[
+'Main Theme',
+'Level 1 Music',
+'Level 2 Music',
+'Level 3 Music',
+'Level 1 Boss Theme',
+'Level 2 Boss Theme',
+'Level 3 Boss Theme',
+'Level 3 Boss Final Phase Theme',
+'Ending Sequence Music',
+'Dynamic Music System',
+]},
+]},
+
+{ id:'testing', num:'08', title:'Testing & Iteration', subtitle:'Playtesting & Bug Fixing', groups:[
+{ name:'Playtesting', tasks:[
+'Internal Full Playthrough',
+'Puzzle Logic Review',
+'Movement Feel Pass',
+'Enemy Fairness Review',
+'Boss Difficulty Tuning',
+'Collectibles Accessibility Check',
+'External Playtest Session',
+'Onboarding Review',
+]},
+{ name:'Bug Fixing', tasks:[
+'Critical Bugs',
+'High Priority Bugs',
+'Medium Priority Bugs',
+'Low Priority Bugs',
+]},
+{ name:'Balancing', tasks:[
+'Difficulty Curve Validation',
+'Death Heatmap Analysis',
+'Combat Number Tuning',
+'Puzzle Timing Review',
+'Enemy Density Review',
+]},
+]},
+
+{ id:'optimization', num:'09', title:'Optimization', subtitle:'Performance & Final Polish', groups:[
+{ name:'Rendering', tasks:[
+'LOD Setup',
+'Polygon Reduction Pass',
+'Occlusion Culling Setup',
+'Draw Call Batching',
+'Texture Atlasing',
+]},
+{ name:'Lighting & VFX', tasks:[
+'Static Lightmap Bake',
+'Particle Budget Cap',
+'Shadow Quality Settings',
+]},
+{ name:'Performance Targets', tasks:[
+'PC 60fps Validation',
+'Console Performance Check',
+'Memory Profiling',
+'Load Time Optimisation',
+'Final Build Size Reduction',
+]},
+]},
+];
+
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const SID = Math.random().toString(36).slice(2,8).toUpperCase();
+const COLORS = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4a9c','#30c8c8','#c87040','#7cc740'];
+const MY_COLOR = COLORS[Math.floor(Math.random()*COLORS.length)];
+let state={}, db, stateRef, currentId='overview', dStatus='todo', dCtx=null;
+
+const $=id=>document.getElementById(id);
+
+function badge(s,lbl){
+const b=$('syncBadge'),l=$('syncLabel');
+b.className='sync-badge '+s;
+l.textContent=lbl||{syncing:'Syncing...',synced:'Synced',live:'Live',offline:'Offline'}[s]||s;
+}
+
+function toast(msg,dur=2800){
+const c=$('toastContainer'),el=document.createElement('div');
+el.className='toast'; el.textContent=msg; c.appendChild(el);
+setTimeout(()=>{el.classList.add('fadeout');setTimeout(()=>el.remove(),400);},dur);
+}
+
+// ─── FIREBASE ─────────────────────────────────────────────────────────────────
+function initFirebase(){
+try{
+const app=initializeApp(firebaseConfig);
+db=getDatabase(app);
+stateRef=ref(db,'pipeline/state');
+badge('syncing');
+onValue(stateRef,snap=>{
+state=snap.val()||{};
+show(currentId); updateStats();
+badge('live','Live');
+$('lastSync').textContent='Live - '+new Date().toLocaleTimeString();
+});
+heartbeat();
+setInterval(heartbeat,15000);
+setInterval(cleanPresence,30000);
+toast('Connected - You are '+SID);
+}catch(e){
+console.error(e); badge('offline'); toast('Firebase error - check console');
+}
+}
+
+async function persist(patch){
+Object.assign(state,patch);
+if(!db){show(currentId);updateStats();return;}
+try{badge('syncing');await update(stateRef,patch);}
+catch(e){badge('offline');toast('Save failed');}
+}
+
+async function heartbeat(){
+if(!db)return;
+try{
+await set(ref(db,'pipeline/presence/'+SID),{id:SID,color:MY_COLOR,ts:Date.now()});
+const snap=await get(ref(db,'pipeline/presence'));
+const all=snap.val()||{};
+const active=Object.values(all).filter(u=>Date.now()-u.ts<45000);
+const el=$('collabAvatars');
+if(el) el.innerHTML=active.map(u=>`<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`).join('');
+if(active.length>1) badge('live',active.length+' Online');
+}catch(e){}
+}
+
+async function cleanPresence(){
+if(!db)return;
+try{
+const snap=await get(ref(db,'pipeline/presence'));
+const all=snap.val()||{},updates={};
+for(const[k,v] of Object.entries(all)) if(Date.now()-v.ts>60000) updates['pipeline/presence/'+k]=null;
+if(Object.keys(updates).length) await update(ref(db),updates);
+}catch(e){}
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function fk(p,g,t){return p+'|||'+g+'|||'+btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g,'_');}
+function getMeta(p,g,t){return state[fk(p,g,t)]||{};}
+function getS(p,g,t){return getMeta(p,g,t).status||'todo';}
+async function setMeta(p,g,t,m){const k=fk(p,g,t),patch={};patch[k]={...getMeta(p,g,t),...m};await persist(patch);}
+
+function resolvedTasks(phId,gName,rawTasks){
+const renames = state['__renames__'+phId+'__'+gName] || {};
+const deleted = state['__deleted__'+phId+'__'+gName] || {};
+// deleted is a Firebase-safe object: { encodedKey: 1, ... }
+const deletedOriginals = new Set(Object.keys(deleted));
+const deletedRenamed = new Set(Object.values(deleted).filter(v=>typeof v==='string'));
+return rawTasks
+.filter(t => !deletedOriginals.has(t)) // remove if original name is deleted
+.map(t => renames[t] || t) // apply rename
+.filter(t => !deletedRenamed.has(t)); // remove if renamed version is deleted
+}
+
+function pStats(ph){
+if(ph.isOverview)return{done:0,inprog:0,total:0};
+let d=0,i=0,to=0;
+for(const g of ph.groups){
+const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
+const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
+for(const t of all){to++;const s=getS(ph.id,g.name,t);if(s==='done')d++;else if(s==='inprogress')i++;}
+}
+return{done:d,inprog:i,total:to};
+}
+
+function allStats(){let d=0,i=0,t=0;for(const p of PHASES){if(p.isOverview)continue;const s=pStats(p);d+=s.done;i+=s.inprog;t+=s.total;}return{done:d,inprog:i,total:t};}
+function cyc(c){return{todo:'inprogress',inprogress:'review',review:'done',done:'blocked',blocked:'todo'}[c]||'todo';}
+function ico(s){return{todo:'',inprogress:'◑',review:'◐',done:'✓',blocked:'✕'}[s]||'';}
+function slbl(s){return{todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'}[s]||'To Do';}
+function scls(s){return{todo:'btn-todo',inprogress:'btn-inprogress',review:'btn-review',done:'btn-done',blocked:'btn-blocked'}[s]||'btn-todo';}
+function tflbl(v){return{'1-2h':'1-2h','half-day':'half day','1d':'1d','2-3d':'2-3d','1w':'1wk','2w':'2wk','1m':'1mo','ongoing':'ongoing'}[v]||v;}
+
+function pills(meta){
+let p='';
+if(meta.assignee) p+=`<span class="task-pill pill-assign">&#9876; ${meta.assignee}</span>`;
+if(meta.timeframe) p+=`<span class="task-pill pill-time">&#9719; ${tflbl(meta.timeframe)}</span>`;
+return p;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderSidebar(aid){
+let h='<div class="sidebar-section-title">Navigation</div>';
+for(const p of PHASES){
+const s=p.isOverview?null:pStats(p);
+const pct=s?(s.total?Math.round(s.done/s.total*100):0):null;
+h+=`<button class="phase-btn ${aid===p.id?'active':''}" onclick="APP.show('${p.id}')"><span class="phase-num">${p.num}</span><span>${p.title}</span>${s?`<span class="phase-mini-progress">${pct}%</span>`:''}</button>`;
+}
+$('sidebar').innerHTML=h;
+}
+
+function renderOverview(){
+const s=allStats(),pct=s.total?Math.round(s.done/s.total*100):0;
+let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">&#9733; Master View</div><div class="panel-title">Labyrinth Of Grief</div><div class="panel-subtitle">Full game development pipeline</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div></div><div class="legend"><div class="legend-item"><div class="legend-dot" style="background:var(--text-dim)"></div>To Do</div><div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>In Progress</div><div class="legend-item"><div class="legend-dot" style="background:var(--blue-bright)"></div>Review</div><div class="legend-item"><div class="legend-dot" style="background:var(--green-bright)"></div>Done</div><div class="legend-item"><div class="legend-dot" style="background:var(--blocked-bright)"></div>Blocked</div></div><div class="overview-grid">`;
+for(const p of PHASES){
+if(p.isOverview)continue;
+const ps=pStats(p),pp=ps.total?Math.round(ps.done/ps.total*100):0;
+h+=`<div class="overview-card" onclick="APP.show('${p.id}')"><div class="card-progress-bar" style="width:${pp}%"></div><div class="card-num">${p.num}</div><div class="card-title">${p.title}</div><div class="card-pct">${pp}%</div><div class="card-tasks">${ps.done}/${ps.total} tasks &middot; ${ps.inprog} active</div></div>`;
+}
+return h+'</div>';
+}
+
+function renderPhase(ph){
+const s=pStats(ph),pct=s.total?Math.round(s.done/s.total*100):0;
+let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">Phase ${ph.num}</div><div class="panel-title">${ph.title}</div><div class="panel-subtitle">${ph.subtitle}</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">${s.done}/${s.total}</div></div></div>`;
+for(const g of ph.groups){
+const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
+const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
+const gd=all.filter(t=>getS(ph.id,g.name,t)==='done').length;
+const ge=encodeURIComponent(g.name);
+h+=`<div class="task-group"><div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
+for(const t of all){
+const ts=getS(ph.id,g.name,t),meta=getMeta(ph.id,g.name,t),te=encodeURIComponent(t);
+h+=`<div class="task-item ${ts}" onclick="APP.openDrawer('${ph.id}','${ge}','${te}')"><div class="task-check" onclick="event.stopPropagation();APP.doToggle('${ph.id}','${ge}','${te}')">${ico(ts)}</div><div class="task-text">${t}</div><div class="task-meta-pills">${pills(meta)}</div><button class="task-status-btn ${scls(ts)}" onclick="event.stopPropagation();APP.doCyc('${ph.id}','${ge}','${te}')">${slbl(ts)}</button></div>`;
+}
+h+=`<div class="add-task-row"><input class="add-task-input" type="text" placeholder="Add task to ${g.name}..." id="ni-${ph.id}-${ge}" onkeydown="if(event.key==='Enter')APP.doAdd('${ph.id}','${ge}')"><button class="add-task-btn-sm" onclick="APP.doAdd('${ph.id}','${ge}')">+ Add</button></div></div>`;
+}
+h+=`<div class="notes-section"><div class="notes-label">Phase Notes</div><textarea class="notes-input" placeholder="Notes, blockers, decisions..." onchange="APP.doNote('${ph.id}',this.value)">${state['__note__'+ph.id]||''}</textarea></div>`;
+
+return h;
+}
+
+// ─── ACTIONS ──────────────────────────────────────────────────────────────────
+function show(id){currentId=id;$(‘main-content’).innerHTML=id===‘overview’?renderOverview():renderPhase(PHASES.find(p=>p.id===id));renderSidebar(id);updateStats();}
+function updateStats(){const s=allStats(),p=s.total?Math.round(s.done/s.total*100):0;$(‘stat-done’).textContent=s.done;$(‘stat-inprog’).textContent=s.inprog;$(‘stat-total’).textContent=s.total;$(‘global-fill’).style.width=p+’%’;$(‘global-pct’).textContent=p+’%’;}
+async function doToggle(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:getS(pid,g,t)===‘done’?‘todo’:‘done’});}
+async function doCyc(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:cyc(getS(pid,g,t))});}
+async function doAdd(pid,ge){
+const g=decodeURIComponent(ge),inp=$(‘ni-’+pid+’-’+ge);
+if(!inp)return;const v=inp.value.trim();if(!v)return;
+const ck=’**custom**’+pid+’__’+g,existing=state[ck]||{},idx=Object.keys(existing).length,patch={};
+patch[ck]={…existing,[idx]:v};await persist(patch);inp.value=’’;
+}
+async function doNote(pid,val){const patch={};patch[’**note**’+pid]=val;await persist(patch);}
+
+// ─── DRAWER ───────────────────────────────────────────────────────────────────
+const STATUSES=[‘todo’,‘inprogress’,‘review’,‘done’,‘blocked’];
+const SNAMES={todo:‘To Do’,inprogress:‘In Progress’,review:‘Review’,done:‘Done’,blocked:‘Blocked’};
+
+function openDrawer(pid,ge,te){
+const g=decodeURIComponent(ge),t=decodeURIComponent(te);
+dCtx={pid,g,t};
+const meta=getMeta(pid,g,t),ph=PHASES.find(p=>p.id===pid);
+$(‘dPhaseTag’).textContent=‘Phase ‘+(ph?.num||’’)+’ - ‘+(ph?.title||’’);
+$(‘dTaskNameDisplay’).textContent=t;
+$(‘dTaskName’).value=t;
+$(‘dAssignee’).value=meta.assignee||’’;
+$(‘dTimeframe’).value=meta.timeframe||’’;
+$(‘dNotes’).value=meta.notes||’’;
+dStatus=meta.status||‘todo’;
+renderStatusChips();
+$(‘drawerOverlay’).classList.add(‘open’);
+$(‘drawer’).classList.add(‘open’);
+$(‘dTaskName’).focus();
+}
+
+function closeDrawer(){$(‘drawerOverlay’).classList.remove(‘open’);$(‘drawer’).classList.remove(‘open’);dCtx=null;}
+
+function renderStatusChips(){
+$(‘dStatusRow’).innerHTML=STATUSES.map(s=>`<div class="status-chip chip-${s}${dStatus===s?' sel':''}" onclick="APP.selStatus('${s}')">${SNAMES[s]}</div>`).join(’’);
+}
+
+function selStatus(s){dStatus=s;renderStatusChips();}
+
+async function saveDrawer(){
+if(!dCtx)return;
+const{pid,g,t}=dCtx;
+const newName=($(‘dTaskName’).value||’’).trim()||t;
+const meta={status:dStatus,assignee:$(‘dAssignee’).value.trim(),timeframe:$(‘dTimeframe’).value,notes:$(‘dNotes’).value.trim()};
+if(newName!==t){
+const patch={};
+patch[fk(pid,g,newName)]={…getMeta(pid,g,t),…meta};
+patch[fk(pid,g,t)]=null;
+const ck=’**custom**’+pid+’**’+g,rk=’**renames**’+pid+’**’+g;
+const customList=state[ck]?{…state[ck]}:null;
+const customEntry=customList&&Object.entries(customList).find(([,v])=>v===t);
+if(customEntry){customList[customEntry[0]]=newName;patch[ck]=customList;}
+else{
+const cr={…(state[rk]||{})};
+let found=false;
+for(const[orig,renamed] of Object.entries(cr)){if(renamed===t){cr[orig]=newName;found=true;break;}}
+if(!found)cr[t]=newName;
+patch[rk]=cr;
+}
+await persist(patch);
+} else {
+await setMeta(pid,g,t,meta);
+}
+closeDrawer();show(currentId);toast(‘Task updated’);
+}
+
+async function deleteTask() {
+if (!dCtx) return;
+const { pid, g, t } = dCtx;
+
+if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
+
+const avatars = $(‘collabAvatars’);
+if (avatars && avatars.children.length > 1) {
+if (!confirm(“There are multiple people online right now.\nReally delete this task for everyone?”)) return;
+}
+
+const patch = {};
+
+// 1. Remove task metadata
+patch[fk(pid, g, t)] = null;
+
+const ck = ‘**custom**’ + pid + ‘**’ + g;
+const rk = ‘**renames**’ + pid + ’**’ + g;
+const dk = ‘**deleted**’ + pid + ‘__’ + g;
+
+// 2. Check if this is a custom (user-added) task
+const customList = state[ck] ? { …state[ck] } : null;
+const customEntry = customList && Object.entries(customList).find(([, v]) => v === t);
+
+if (customEntry) {
+// Custom task — remove from custom list
+delete customList[customEntry[0]];
+patch[ck] = Object.keys(customList).length ? customList : null;
+} else {
+// Built-in task — find its original name (before any rename)
+const renames = state[rk] || {};
+let originalName = t;
+for (const [orig, renamed] of Object.entries(renames)) {
+if (renamed === t) { originalName = orig; break; }
+}
+
+```
+// Clean up rename entry if it exists
+if (state[rk]) {
+const newRenames = { ...renames };
+delete newRenames[originalName];
+patch[rk] = Object.keys(newRenames).length ? newRenames : null;
+}
+
+// Mark original name as deleted — store as object key so Firebase keeps it
+const existing = state[dk] || {};
+patch[dk] = { ...existing, [originalName]: 1 };
+```
+
+}
+
+try {
+await persist(patch);
+closeDrawer();
+show(currentId);
+toast(‘Task permanently deleted’);
+} catch (err) {
+console.error(err);
+toast(‘Delete failed - check console’);
+}
+}
+
+window.APP={show,openDrawer,closeDrawer,doToggle,doCyc,doAdd,doNote,selStatus,saveDrawer,deleteTask};
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+function boot(){renderSidebar(‘overview’);show(‘overview’);initFirebase();}
+if(document.readyState===‘loading’){document.addEventListener(‘DOMContentLoaded’,boot);}else{boot();}
+</script>
+
+</body>
+</html>
+
+On Wed, Mar 4, 2026 at 9:50 AM Yeisaliz Perez <perezy2107@student.faytechcc.edu> wrote:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Labyrinth Of Grief — Production Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap
+" rel="stylesheet">
+
+<style>
+:root{--bg:#0a0806;--surface:#
+120f0a;--surface2:#1a1410;--surface3:#221c15;--border:#2e2318;--red:#a01a1a;--red-bright:#e03030;--red-dim:#6b1a1a;--red-glow:rgba(180,30,30,0.12);--blocked:#8b2a1a;--blocked-bright:#d44a2a;--green:#2a5c2a;--green-bright:#4a9c4a;--blue:#1a3a6b;--blue-bright:#4a7cc7;--text:#d4c4a0;--text-dim:#7a6a50;--text-bright:#f0e0c0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:16px;min-height:100vh;overflow-x:hidden}
+header{background:linear-gradient(180deg,#0d0a06,var(--surface));border-bottom:1px solid var(--border);padding:0 2rem;position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 32px rgba(0,0,0,.6)}
+.logo{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;color:var(--red-bright);letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:.75rem}
+.logo-icon{width:24px;height:24px;background:var(--red);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:torchflicker 3s ease-in-out infinite}
+@keyframes torchflicker{0%,100%{opacity:1;transform:scale(1)}25%{opacity:.8;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}75%{opacity:.9;transform:scale(.98)}}
+.header-right{display:flex;align-items:center;gap:1.5rem}
+.header-stats{display:flex;gap:2rem;align-items:center}
+
+.stat-item{text-align:center}
+.stat-num{font-family:'Cinzel'
+,serif;font-size:1.4rem;font-weight:600;color:var(--red-bright);display:block;line-height:1}
+.stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
+.stat-divider{width:1px;height:32px;background:var(--border)}
+.sync-badge{display:flex;align-items:center;gap:.4rem;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);padding:.3rem .7rem;border:1px solid var(--border);border-radius:2px;transition:border-color .3s}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .3s}
+.sync-badge.syncing .sync-dot{background:var(--red-bright);animation:blink .7s infinite}
+
+.sync-badge.synced .sync-dot,.sync-badge.live .sync-dot{background:var(--
+green-bright)}
+
+.sync-badge.live .sync-dot{animation:blink 2s infinite}
+.sync-badge.live{border-color:
+rgba(74,156,74,.35)}
+
+@keyframes blink{0%,100%{opacity:1}50%{
+opacity:.25}}
+.progress-bar-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
+.progress-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;min-width:120px}
+.progress-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));border-radius:3px;transition:width .5s ease;box-shadow:0 0 8px var(--red)}
+.progress-pct{font-family:'Cinzel',serif;font-size:.85rem;color:var(--red-bright);min-width:40px;text-align:right}
+.collab-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.35rem 2rem;display:flex;align-items:center;gap:.75rem}
+.collab-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
+.collab-avatars{display:flex;gap:.3rem}
+.collab-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-family:'Cinzel',serif;border:1px solid;cursor:default;transition:transform .15s}
+.collab-avatar:hover{transform:scale(1.2)}
+.last-sync{margin-left:auto;font-size:.68rem;color:var(--text-dim);font-style:italic}
+.container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 118px);overflow:hidden}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--surface)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--red-dim)}
+.sidebar-section-title{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;padding:1.2rem 1.2rem .5rem;border-top:1px solid var(--border)}
+.sidebar-section-title:first-child{border-top:none}
+.phase-btn{display:flex;align-items:center;gap:.75rem;padding:.65rem 1.2rem;cursor:pointer;transition:all .15s;border-left:3px solid transparent;width:100%;background:none;border-right:none;border-top:none;border-bottom:none;text-align:left;color:var(--text);font-family:'Crimson Pro',serif;font-size:.95rem}
+.phase-btn:hover{background:var(--red-glow);color:var(--text-bright)}
+.phase-btn.active{background:var(--red-glow);border-left-color:var(--red);color:var(--red-bright)}
+.phase-num{font-family:'Cinzel',serif;font-size:.7rem;color:var(--red-dim);min-width:20px}
+
+.phase-btn.active .phase-num{color:var(--red)}
+.phase-mini-progress{margin-
+left:auto;font-size:.7rem;color:var(--text-dim)}
+.phase-btn.active .phase-mini-progress{color:var(--red)}
+.main-content{overflow-y:auto;padding:2rem;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--bg)}
+.main-content::-webkit-scrollbar{width:4px}.main-content::-webkit-scrollbar-thumb{background:var(--red-dim)}
+.panel-header{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+
+.panel-header-left{flex:1}
+.phase-tag{font-family:'
+Cinzel',serif;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.4rem}
+.panel-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:600;color:var(--text-bright);line-height:1.2;margin-bottom:.4rem}
+.panel-subtitle{font-size:1rem;color:var(--text-dim);font-style:italic}
+.phase-progress-ring{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0}
+.ring-pct{font-family:'Cinzel',serif;font-size:1.5rem;color:var(--red-bright);line-height:1}
+.ring-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
+.task-group{margin-bottom:1.5rem}
+.task-group-header{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
+.group-count{color:var(--red-dim);font-size:.7rem}
+.task-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;margin-bottom:3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.task-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .15s}
+.task-item:hover{border-color:var(--red-dim);background:var(--surface2)}
+.task-item:hover::before{background:var(--red-dim)}
+.task-item.done::before{background:var(--green-bright)}
+
+.task-item.done{opacity:.6}
+.task-item.inprogress::before{
+background:var(--red);box-shadow:0 0 6px rgba(160,26,26,.5)}
+.task-item.review::before{background:var(--blue-bright)}
+.task-item.blocked::before{background:var(--blocked-bright)}
+.task-check{width:18px;height:18px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.75rem;transition:all .15s;cursor:pointer}
+.task-item.done .task-check{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
+.task-item.inprogress .task-check{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
+.task-item.review .task-check{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
+.task-item.blocked .task-check{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
+
+.task-text{flex:1;font-size:.
+95rem;color:var(--text);line-height:1.3}
+.task-item.done .task-text{text-decoration:line-through;color:var(--text-dim)}
+.task-meta-pills{display:flex;gap:.35rem;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:180px}
+.task-pill{font-size:.58rem;padding:2px 6px;border-radius:2px;border:1px solid;font-family:'Cinzel',serif;letter-spacing:.04em;white-space:nowrap}
+.pill-assign{border-color:rgba(74,124,199,.45);color:#6a9cd9;background:rgba(26,58,107,.3)}
+.pill-time{border-color:rgba(74,156,74,.45);color:#80c880;background:rgba(42,92,42,.2)}
+.task-status-btn{font-size:.65rem;padding:2px 8px;border-radius:2px;border:1px solid;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;background:none;transition:all .15s;white-space:nowrap}
+.btn-todo{border-color:var(--text-dim);color:var(--text-dim)}.btn-todo:hover{border-color:var(--red-dim);color:var(--red-dim)}
+.btn-inprogress{border-color:var(--red);color:var(--red)}
+.btn-review{border-color:var(--blue-bright);color:var(--blue-bright)}
+.btn-done{border-color:var(--green-bright);color:var(--green-bright)}
+.btn-blocked{border-color:var(--blocked-bright);color:var(--blocked-bright)}
+.add-task-row{display:flex;gap:.5rem;margin-top:.75rem;margin-bottom:.5rem}
+.add-task-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.9rem;border-radius:3px;outline:none;transition:border-color .15s}
+.add-task-input:focus{border-color:var(--red-dim)}
+.add-task-input::placeholder{color:var(--text-dim);font-style:italic}
+.add-task-btn-sm{background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;cursor:pointer;transition:all .15s}
+.add-task-btn-sm:hover{background:var(--red);color:var(--bg)}
+.notes-section{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.notes-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.5rem}
+.notes-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.75rem;font-family:'Crimson Pro',serif;font-size:.95rem;line-height:1.6;font-style:italic;resize:vertical;min-height:90px;border-radius:3px;outline:none}
+.notes-input:focus{border-color:var(--red-dim)}
+.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.overview-card{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.overview-card:hover{border-color:var(--red-dim);background:var(--surface2)}
+.card-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));transition:width .6s ease}
+.card-num{font-family:'Cinzel',serif;font-size:.65rem;color:var(--red-dim);letter-spacing:.1em;margin-bottom:.3rem}
+.card-title{font-family:'Cinzel',serif;font-size:.9rem;font-weight:600;color:var(--text-bright);margin-bottom:.4rem;line-height:1.3}
+.card-pct{font-size:1.8rem;font-family:'Cinzel',serif;color:var(--red-bright);line-height:1;margin-bottom:.2rem}
+.card-tasks{font-size:.8rem;color:var(--text-dim)}
+
+.legend{display:flex;gap:1.
+5rem;margin-bottom:1rem;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* DRAWER */
+.drawer-overlay{position:
+fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);z-index:301;transform:translateX(105%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
+.drawer::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);pointer-events:none}
+.drawer.open{transform:translateX(0)}
+
+.drawer-header{padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border);background:
+linear-gradient(180deg,var(--surface2),var(--surface));position:sticky;top:0;z-index:1}
+.drawer-phase-tag{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.35rem}
+.drawer-task-name{font-family:'Cinzel',serif;font-size:.95rem;color:var(--text-bright);line-height:1.45;margin-bottom:1rem;padding-right:2rem}
+.drawer-status-row{display:flex;gap:.4rem;flex-wrap:wrap}
+.status-chip{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .65rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;color:var(--text-dim);user-select:none}
+.chip-todo.sel{background:rgba(122,106,80,.2);border-color:var(--text-dim);color:var(--text-bright)}
+.chip-inprogress.sel{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
+.chip-review.sel{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
+.chip-done.sel{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
+.chip-blocked.sel{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
+.status-chip:hover{border-color:var(--text-dim);color:var(--text)}
+
+.drawer-body{padding:1.25rem 1.5rem;flex:1;display:flex;
+flex-direction:column;gap:1.2rem}
+.drawer-field{display:flex;flex-direction:column;gap:.35rem}
+.drawer-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim)}
+.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.95rem;border-radius:3px;outline:none;transition:border-color .15s;width:100%}
+.di:focus{border-color:var(--red-dim)}
+.di::placeholder{color:var(--text-dim);font-style:italic}
+select.di{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.04em;cursor:pointer}
+select.di option{background:var(--surface2)}
+textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
+
+.drawer-footer{padding:1rem 1.5rem 1.5rem;display:flex;flex-
+direction:column;gap:.5rem;border-top:1px solid var(--border)}
+.drawer-footer-actions{display:flex;gap:.6rem}
+
+.drawer-save{flex:1;padding:.
+65rem;background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
+.drawer-save:hover{background:var(--red);color:var(--bg)}
+
+.drawer-cancel{padding:.65rem 1rem;background:none;border:
+1px solid var(--border);color:var(--text-dim);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
+.drawer-cancel:hover{border-color:var(--text-dim);color:var(--text)}
+.drawer-delete{width:100%;padding:.6rem;background:none;border:1px solid #3a1010;color:#7a3030;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;margin-top:.25rem}
+.drawer-delete:hover{background:rgba(160,26,26,.18);border-color:var(--red-bright);color:var(--red-bright);box-shadow:0 0 8px rgba(160,26,26,.2)}
+.drawer-close-btn{position:absolute;top:1rem;right:1rem;background:none;border:1px solid var(--border);color:var(--text-dim);width:26px;height:26px;border-radius:2px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:2}
+.drawer-close-btn:hover{border-color:var(--red-dim);color:var(--text)}
+.toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
+.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--red);padding:.6rem 1rem;font-size:.82rem;color:var(--text);border-radius:3px;animation:toastIn .3s ease;max-width:300px;line-height:1.4}
+.toast.fadeout{animation:toastOut .4s ease forwards}
+
+@keyframes toastIn{from{opacity:0;
+transform:translateY(8px)}to{opacity:1;transform:none}}
+
+@keyframes toastOut{to{opacity:0;
+transform:translateY(4px)}}
+
+</style>
+</head>
+<body>
+
+<header>
+<div class="logo"><div class="logo-icon"></div>
+Labyrinth Of Grief</div>
+
+<div class="header-right">
+<div class="header-stats">
+<div class="stat-item"><span class="stat-num" id="stat-done">0</span><span class="stat-label">Complete</
+span></div>
+
+<div class="stat-divider"></div>
+<div class="stat-item"><span class="stat-num" id="stat-inprog">0</span><span class="stat-label">In Progress</span></div>
+<div class="stat-divider"></div>
+<div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Total Tasks</span></div>
+</div>
+<div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</
+span></div>
+
+</div>
+</header>
 
 <div class="progress-bar-wrap">
 <span class="progress-label">Overall Progress</span>
@@ -175,7 +1081,9 @@ textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
 </div>
 
 <div class="collab-bar">
-<span class="collab-label">Online</span>
+<span class="collab-label">Online</
+span>
+
 <div class="collab-avatars" id="collabAvatars"></div>
 <span class="last-sync" id="lastSync">—</span>
 </div>
@@ -745,615 +1653,3 @@ initFirebase();
 
 if (document.readyState === 'loading') {
 document.addEventListener('DOMContentLoaded', boot);
-} else {
-boot();
-}
-</script>
-
-</body>
-</html>
-
-
-On Wed, Mar 4, 2026 at 9:20 AM Yeisaliz Perez <yeisaliz.2006@gmail.com> wrote:
-<!DOCTYPE html>
-
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Labyrinth Of Grief — Production Pipeline</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#0a0806;--surface:#120f0a;--surface2:#1a1410;--surface3:#221c15;--border:#2e2318;--red:#a01a1a;--red-bright:#e03030;--red-dim:#6b1a1a;--red-glow:rgba(180,30,30,0.12);--blocked:#8b2a1a;--blocked-bright:#d44a2a;--green:#2a5c2a;--green-bright:#4a9c4a;--blue:#1a3a6b;--blue-bright:#4a7cc7;--text:#d4c4a0;--text-dim:#7a6a50;--text-bright:#f0e0c0}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:16px;min-height:100vh;overflow-x:hidden}
-header{background:linear-gradient(180deg,#0d0a06,var(--surface));border-bottom:1px solid var(--border);padding:0 2rem;position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 32px rgba(0,0,0,.6)}
-.logo{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;color:var(--red-bright);letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:.75rem}
-.logo-icon{width:24px;height:24px;background:var(--red);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:torchflicker 3s ease-in-out infinite}
-@keyframes torchflicker{0%,100%{opacity:1;transform:scale(1)}25%{opacity:.8;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}75%{opacity:.9;transform:scale(.98)}}
-.header-right{display:flex;align-items:center;gap:1.5rem}
-.header-stats{display:flex;gap:2rem;align-items:center}
-.stat-item{text-align:center}
-.stat-num{font-family:'Cinzel',serif;font-size:1.4rem;font-weight:600;color:var(--red-bright);display:block;line-height:1}
-.stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.stat-divider{width:1px;height:32px;background:var(--border)}
-.sync-badge{display:flex;align-items:center;gap:.4rem;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);padding:.3rem .7rem;border:1px solid var(--border);border-radius:2px;transition:border-color .3s}
-.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .3s}
-.sync-badge.syncing .sync-dot{background:var(--red-bright);animation:blink .7s infinite}
-.sync-badge.synced .sync-dot,.sync-badge.live .sync-dot{background:var(--green-bright)}
-.sync-badge.live .sync-dot{animation:blink 2s infinite}
-.sync-badge.live{border-color:rgba(74,156,74,.35)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.progress-bar-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
-.progress-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;min-width:120px}
-.progress-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));border-radius:3px;transition:width .5s ease;box-shadow:0 0 8px var(--red)}
-.progress-pct{font-family:'Cinzel',serif;font-size:.85rem;color:var(--red-bright);min-width:40px;text-align:right}
-.collab-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.35rem 2rem;display:flex;align-items:center;gap:.75rem}
-.collab-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
-.collab-avatars{display:flex;gap:.3rem}
-.collab-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-family:'Cinzel',serif;border:1px solid;cursor:default;transition:transform .15s}
-.collab-avatar:hover{transform:scale(1.2)}
-.last-sync{margin-left:auto;font-size:.68rem;color:var(--text-dim);font-style:italic}
-.container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 118px);overflow:hidden}
-.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--surface)}
-.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.sidebar-section-title{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;padding:1.2rem 1.2rem .5rem;border-top:1px solid var(--border)}
-.sidebar-section-title:first-child{border-top:none}
-.phase-btn{display:flex;align-items:center;gap:.75rem;padding:.65rem 1.2rem;cursor:pointer;transition:all .15s;border-left:3px solid transparent;width:100%;background:none;border-right:none;border-top:none;border-bottom:none;text-align:left;color:var(--text);font-family:'Crimson Pro',serif;font-size:.95rem}
-.phase-btn:hover{background:var(--red-glow);color:var(--text-bright)}
-.phase-btn.active{background:var(--red-glow);border-left-color:var(--red);color:var(--red-bright)}
-.phase-num{font-family:'Cinzel',serif;font-size:.7rem;color:var(--red-dim);min-width:20px}
-.phase-btn.active .phase-num{color:var(--red)}
-.phase-mini-progress{margin-left:auto;font-size:.7rem;color:var(--text-dim)}
-.phase-btn.active .phase-mini-progress{color:var(--red)}
-.main-content{overflow-y:auto;padding:2rem;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--bg)}
-.main-content::-webkit-scrollbar{width:4px}.main-content::-webkit-scrollbar-thumb{background:var(--red-dim)}
-.panel-header{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
-.panel-header-left{flex:1}
-.phase-tag{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.4rem}
-.panel-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:600;color:var(--text-bright);line-height:1.2;margin-bottom:.4rem}
-.panel-subtitle{font-size:1rem;color:var(--text-dim);font-style:italic}
-.phase-progress-ring{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0}
-.ring-pct{font-family:'Cinzel',serif;font-size:1.5rem;color:var(--red-bright);line-height:1}
-.ring-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
-.task-group{margin-bottom:1.5rem}
-.task-group-header{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
-.group-count{color:var(--red-dim);font-size:.7rem}
-.task-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;margin-bottom:3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.task-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .15s}
-.task-item:hover{border-color:var(--red-dim);background:var(--surface2)}
-.task-item:hover::before{background:var(--red-dim)}
-.task-item.done::before{background:var(--green-bright)}
-.task-item.done{opacity:.6}
-.task-item.inprogress::before{background:var(--red);box-shadow:0 0 6px rgba(160,26,26,.5)}
-.task-item.review::before{background:var(--blue-bright)}
-.task-item.blocked::before{background:var(--blocked-bright)}
-.task-check{width:18px;height:18px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.75rem;transition:all .15s;cursor:pointer}
-.task-item.done .task-check{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.task-item.inprogress .task-check{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.task-item.review .task-check{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.task-item.blocked .task-check{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.task-text{flex:1;font-size:.95rem;color:var(--text);line-height:1.3}
-.task-item.done .task-text{text-decoration:line-through;color:var(--text-dim)}
-.task-meta-pills{display:flex;gap:.35rem;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:180px}
-.task-pill{font-size:.58rem;padding:2px 6px;border-radius:2px;border:1px solid;font-family:'Cinzel',serif;letter-spacing:.04em;white-space:nowrap}
-.pill-assign{border-color:rgba(74,124,199,.45);color:#6a9cd9;background:rgba(26,58,107,.3)}
-.pill-time{border-color:rgba(74,156,74,.45);color:#80c880;background:rgba(42,92,42,.2)}
-.task-status-btn{font-size:.65rem;padding:2px 8px;border-radius:2px;border:1px solid;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;background:none;transition:all .15s;white-space:nowrap}
-.btn-todo{border-color:var(--text-dim);color:var(--text-dim)}.btn-todo:hover{border-color:var(--red-dim);color:var(--red-dim)}
-.btn-inprogress{border-color:var(--red);color:var(--red)}
-.btn-review{border-color:var(--blue-bright);color:var(--blue-bright)}
-.btn-done{border-color:var(--green-bright);color:var(--green-bright)}
-.btn-blocked{border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.add-task-row{display:flex;gap:.5rem;margin-top:.75rem;margin-bottom:.5rem}
-.add-task-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.9rem;border-radius:3px;outline:none;transition:border-color .15s}
-.add-task-input:focus{border-color:var(--red-dim)}
-.add-task-input::placeholder{color:var(--text-dim);font-style:italic}
-.add-task-btn-sm{background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;cursor:pointer;transition:all .15s}
-.add-task-btn-sm:hover{background:var(--red);color:var(--bg)}
-.notes-section{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
-.notes-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.5rem}
-.notes-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.75rem;font-family:'Crimson Pro',serif;font-size:.95rem;line-height:1.6;font-style:italic;resize:vertical;min-height:90px;border-radius:3px;outline:none}
-.notes-input:focus{border-color:var(--red-dim)}
-.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.overview-card{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
-.overview-card:hover{border-color:var(--red-dim);background:var(--surface2)}
-.card-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));transition:width .6s ease}
-.card-num{font-family:'Cinzel',serif;font-size:.65rem;color:var(--red-dim);letter-spacing:.1em;margin-bottom:.3rem}
-.card-title{font-family:'Cinzel',serif;font-size:.9rem;font-weight:600;color:var(--text-bright);margin-bottom:.4rem;line-height:1.3}
-.card-pct{font-size:1.8rem;font-family:'Cinzel',serif;color:var(--red-bright);line-height:1;margin-bottom:.2rem}
-.card-tasks{font-size:.8rem;color:var(--text-dim)}
-.legend{display:flex;gap:1.5rem;margin-bottom:1rem;flex-wrap:wrap}
-.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim)}
-.legend-dot{width:8px;height:8px;border-radius:50%}
-/* DRAWER */
-.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
-.drawer-overlay.open{opacity:1;pointer-events:all}
-.drawer{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);z-index:301;transform:translateX(105%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
-.drawer::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);pointer-events:none}
-.drawer.open{transform:translateX(0)}
-.drawer-header{padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--surface2),var(--surface));position:sticky;top:0;z-index:1}
-.drawer-phase-tag{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.35rem}
-.drawer-task-name{font-family:'Cinzel',serif;font-size:.95rem;color:var(--text-bright);line-height:1.45;margin-bottom:1rem;padding-right:2rem}
-.drawer-status-row{display:flex;gap:.4rem;flex-wrap:wrap}
-.status-chip{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .65rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;color:var(--text-dim);user-select:none}
-.chip-todo.sel{background:rgba(122,106,80,.2);border-color:var(--text-dim);color:var(--text-bright)}
-.chip-inprogress.sel{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
-.chip-review.sel{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
-.chip-done.sel{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
-.chip-blocked.sel{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
-.status-chip:hover{border-color:var(--text-dim);color:var(--text)}
-.drawer-body{padding:1.25rem 1.5rem;flex:1;display:flex;flex-direction:column;gap:1.2rem}
-.drawer-field{display:flex;flex-direction:column;gap:.35rem}
-.drawer-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim)}
-.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.95rem;border-radius:3px;outline:none;transition:border-color .15s;width:100%}
-.di:focus{border-color:var(--red-dim)}
-.di::placeholder{color:var(--text-dim);font-style:italic}
-select.di{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.04em;cursor:pointer}
-select.di option{background:var(--surface2)}
-textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
-.drawer-footer{padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.5rem;border-top:1px solid var(--border)}
-.drawer-footer-actions{display:flex;gap:.6rem}
-.drawer-save{flex:1;padding:.65rem;background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-save:hover{background:var(--red);color:var(--bg)}
-.drawer-cancel{padding:.65rem 1rem;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
-.drawer-cancel:hover{border-color:var(--text-dim);color:var(--text)}
-.drawer-delete{width:100%;padding:.6rem;background:none;border:1px solid #3a1010;color:#7a3030;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;margin-top:.25rem}
-.drawer-delete:hover{background:rgba(160,26,26,.18);border-color:var(--red-bright);color:var(--red-bright);box-shadow:0 0 8px rgba(160,26,26,.2)}
-.drawer-close-btn{position:absolute;top:1rem;right:1rem;background:none;border:1px solid var(--border);color:var(--text-dim);width:26px;height:26px;border-radius:2px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:all .15s;z-index:2}
-.drawer-close-btn:hover{border-color:var(--red-dim);color:var(--text)}
-.toast-container{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
-.toast{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--red);padding:.6rem 1rem;font-size:.82rem;color:var(--text);border-radius:3px;animation:toastIn .3s ease;max-width:300px;line-height:1.4}
-.toast.fadeout{animation:toastOut .4s ease forwards}
-@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes toastOut{to{opacity:0;transform:translateY(4px)}}
-</style>
-</head>
-<body>
-
-<header>
-<div class="logo"><div class="logo-icon"></div>Labyrinth Of Grief</div>
-<div class="header-right">
-<div class="header-stats">
-<div class="stat-item"><span class="stat-num" id="stat-done">0</span><span class="stat-label">Complete</span></div>
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-inprog">0</span><span class="stat-label">In Progress</span></div>
-<div class="stat-divider"></div>
-<div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Total Tasks</span></div>
-</div>
-<div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</span></div>
-</div>
-</header>
-<div class="progress-bar-wrap">
-<span class="progress-label">Overall Progress</span>
-<div class="progress-track"><div class="progress-fill" id="global-fill" style="width:0%"></div></div>
-<span class="progress-pct" id="global-pct">0%</span>
-</div>
-<div class="collab-bar">
-<span class="collab-label">Online</span>
-<div class="collab-avatars" id="collabAvatars"></div>
-<span class="last-sync" id="lastSync">&#8212;</span>
-</div>
-<div class="container">
-<nav class="sidebar" id="sidebar"></nav>
-<div class="main-content" id="main-content"></div>
-</div>
-
-<!-- DRAWER -->
-
-<div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
-<div class="drawer" id="drawer">
-<button class="drawer-close-btn" onclick="APP.closeDrawer()">&#x2715;</button>
-<div class="drawer-header">
-<div class="drawer-phase-tag" id="dPhaseTag"></div>
-<div class="drawer-task-name" id="dTaskNameDisplay"></div>
-<div class="drawer-status-row" id="dStatusRow"></div>
-</div>
-<div class="drawer-body">
-<div class="drawer-field">
-<label class="drawer-label">&#x270E; Task Name</label>
-<input class="di" id="dTaskName" placeholder="Task name&#8230;" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x2694; Assignee</label>
-<input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x25F7; Estimated Timeframe</label>
-<select class="di" id="dTimeframe">
-<option value="">&#8212; Select estimate &#8212;</option>
-<option value="1-2h">1&#8211;2 hours</option>
-<option value="half-day">Half day</option>
-<option value="1d">1 day</option>
-<option value="2-3d">2&#8211;3 days</option>
-<option value="1w">~1 week</option>
-<option value="2w">~2 weeks</option>
-<option value="1m">~1 month</option>
-<option value="ongoing">Ongoing</option>
-</select>
-</div>
-<div class="drawer-field">
-<label class="drawer-label">&#x2726; Notes &amp; Details</label>
-<textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links&#8230;"></textarea>
-</div>
-</div>
-<div class="drawer-footer">
-<div class="drawer-footer-actions">
-<button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
-<button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
-</div>
-<button class="drawer-delete" onclick="APP.deleteTask()"><span style="color:var(--red-bright)">&#x1F5D1; Permanently Delete</span></button>
-</div>
-</div>
-<div class="toast-container" id="toastContainer"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-const firebaseConfig = {
-apiKey: "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
-authDomain: "labyrinth-of-grief-6a2e2.firebaseapp.com",
-databaseURL: "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
-projectId: "labyrinth-of-grief-6a2e2",
-storageBucket: "labyrinth-of-grief-6a2e2.firebasestorage.app",
-messagingSenderId: "148640942330",
-appId: "1:148640942330:web:8f091f07193cd434bba143"
-};
-
-// ─── PHASES ──────────────────────────────────────────────────────────────────
-const PHASES = [
-{ id:'overview', num:'&#x2605;', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
-{ id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
-{ name:'Concept & Vision', tasks:['Define game title and tagline','Write one-page concept document','Define target platform (PC / Console)','Lock core emotional arc: confusion to rage to grief to calm','Lock narrative premise: protagonist, dog, dungeon'] },
-{ name:'Level Concepts', tasks:['Level 1 concept: The Awakening - dungeon ruins','Level 2 concept: The Bone Cavern - goblin crypt','Level 3 concept: Hollow Sky Cathedral - bat belfry','Intermission design: above-ground NPC village scene','Define emotional transition beats between each level'] },
-{ name:'References & Moodboards', tasks:['Moodboard: Level 1 visual tone (stone dungeon)','Moodboard: Level 2 visual tone (bone cavern)','Moodboard: Level 3 visual tone (cathedral/belfry)','Reference games: movement feel (Celeste, Hollow Knight)','Reference games: dungeon design (Dark Souls, Limbo)'] },
-{ name:'Narrative Design', tasks:['Write amnesia arc beats - what fragments does player recover?','Design dog-rescue emotional payoff moments','NPC design: village character with missing cat','Memory shard content (lore per boss defeat)','Final escape sequence narrative scripting'] },
-]},
-{ id:'design', num:'02', title:'Game Design', subtitle:'Level & Systems Design', groups:[
-{ name:'Level Design Documents', tasks:['Full LDD: Level 1 - Awakening (all rooms)','Full LDD: Level 2 - Bone Cavern (all 17 zones)','Full LDD: Level 3 - Hollow Sky Cathedral (all 5 phases)','Define all secret rooms and collectibles (collar, ball, hearts)','Define all puzzle solutions with step-by-step logic'] },
-{ name:'Enemy Design', tasks:['Normal Monster - patrol pattern, detect range, attack','Siegus Monster - passive trigger conditions, aggro speed','Echo Monster - sound radius, aggro logic, pathfinding','Statue Monster - proximity awaken range, timing window','Light Guardian - patrol zones, shadow detection logic','Ravager - group behavior, obstacle destruction','Level 1 Golem Boss - sleep/awaken/charge/die pattern','Goblin King - 3-phase FSM, seesaw reflect, minion spawns','Bat Queen - 3-phase: swarm / aerial pursuit / solo silence'] },
-{ name:'Puzzle Design', tasks:['L1: 2-button gate puzzle (box + player)','L1: Golem-charges-wall puzzle','L1: Boss grapple-to-head attack loop','L2: Seesaw crate-launch traversal (#2)','L2: Skull weight accumulation puzzle (#5)','L2: Goblin pressure-button launch puzzle (#4)','L2: Structure demolition path puzzles (#6, #7, #8)','L3: Bell sequence puzzle (Phase 3 belfry)','L3: Sound-based swarm-redirect platforming','L3: Bat Queen shield break via sound'] },
-{ name:'Pacing & Progression', tasks:['Map ability unlock order across all 3 levels','Define safe zone and checkpoint placement','Define tension/relief rhythm per level','Balance optional vs required content ratio'] },
-]},
-{ id:'blockout', num:'03', title:'Blockout / Greybox', subtitle:'First Playable Version', groups:[
-{ name:'Level 1 Blockout', tasks:['Box out all rooms and corridors to scale','Test grappling hook reach and swing distance','Place placeholder enemies in correct positions','Test golem boss arena size and sightlines','Validate all puzzle solutions are completable'] },
-{ name:'Level 2 Blockout', tasks:['Build cavern geometry with correct verticality','Test seesaw physics and launch distances','Block out all 3 key-path wings','Test bridge and destructible structure collisions','Validate Goblin King arena sightlines and seesaw range'] },
-{ name:'Level 3 Blockout', tasks:['Vertical scale test across all 5 phases','Test bat grapple attach and ride release points','Block out bell tower structure and bat pathways','Test aerial traversal gaps and catch margins','Validate Boss Queen arena wind currents and ring geometry'] },
-{ name:'Core Feel Validation', tasks:['Player movement feel: jump, swing, land feedback','Grappling hook attach feedback and angle limits','Enemy detection cone visual debug pass','Sound radius visualization pass (Echo Monster)','Checkpoint and respawn smoke test'] },
-]},
-{ id:'art', num:'04', title:'Art Production', subtitle:'Concept, 3D, Texture, Animation', groups:[
-{ name:'Concept Art', tasks:['Protagonist - idle, grapple, run silhouettes','Dog - alive (end), captured, collar prop','Level 1 Golem Boss final design','Goblin - standard, king variant, builder variant','Skeleton - standard, risen state','Standard bat + Giant Bat','Bat Queen - 3 phase visual states','Level 1 environment: stone ruins, torch sconces, locked doors','Level 2 environment: bone cavern, goblin scaffolding, seesaw rigs','Level 3 environment: cathedral, bell tower, cracked ceiling','Key props: grappling hook, seesaw, bells, skulls, pressure plates'] },
-{ name:'3D Modeling - Characters', tasks:['Protagonist: high-poly to low-poly to retopology','Golem: high-poly to low-poly to retopology','Goblin variants (standard + king + builder)','Skeleton variants','Standard Bat + Giant Bat','Bat Queen: high-poly to low-poly to retopology','Dog model (rescued state)'] },
-{ name:'3D Modeling - Environment', tasks:['Modular dungeon tile kit (Level 1)','Cavern speleothem and bone modular kit (Level 2)','Cathedral pillar and arch modular kit (Level 3)','Goblin structure props: seesaw, platforms, crates, bridges','Interactive props: levers, bells, pressure plates, keys','Destructible structure variants (breakable walls, scaffolding)'] },
-{ name:'UV Mapping & Texturing (PBR)', tasks:['Unwrap UVs - all character models','Base Color maps - all characters','Normal maps - all characters','Roughness / Metallic maps - all characters','Environment tilesets: Base Color + Normal + Roughness','Props textured (interactive objects prioritized first)'] },
-{ name:'Rigging & Animation', tasks:['Protagonist skeleton rig','Protagonist: idle, run, swing, grapple-attach, land, damage','Golem: idle, walk, charge, death','Goblin: idle, patrol, attack, flinch, taunt (king)','Skeleton: idle, rise, attack, collapse','Standard Bat: fly loop, dive, scatter','Giant Bat: fly, dive bomb, grab attempt, death','Bat Queen: all 3 phase animation sets + transitions'] },
-]},
-{ id:'integration', num:'05', title:'Engine Integration', subtitle:'Importing & Engine Setup', groups:[
-{ name:'Asset Import Pipeline', tasks:['Set up project folder structure and naming conventions','Import all character models and verify scale','Import all environment tiles and test snap grids','Import all props and set up physics collision','Material creation and PBR shader assignment'] },
-{ name:'Physics & Collision', tasks:['Player character controller setup','Grapple raycast and attach-point detection system','Seesaw physics body and weight-based response','Destructible object breakpoint triggers','Bat grapple-attach and ride physics system','Wind current force volumes for Boss Queen arena'] },
-{ name:'Animation Integration', tasks:['Protagonist animator state machine','Enemy animator state machines - all 6 enemy types','Boss animator controllers - all 3 bosses','Blend trees for movement and speed states','Event-driven animation triggers (land impact, attack hit, stun)'] },
-]},
-{ id:'programming', num:'06', title:'Programming / Systems', subtitle:'Core Code & AI', groups:[
-{ name:'Core Mechanics', tasks:['Grappling hook: fire, attach, swing, release, momentum boost','Grapple combat uses: pull enemy, push, brief stun','Stealth: sight cone detection, alert stages (unaware/suspicious/alerted)','Sound radius system: propagation, Echo Monster trigger','Shadow zone detection for Light Guardian'] },
-{ name:'Enemy AI', tasks:['Normal Monster: patrol to detect to chase to attack FSM','Siegus Monster: passive trigger on break/touch to aggro','Echo Monster: sound-reactive pathfinding and aggro','Statue Monster: proximity awaken, timing-based','Light Guardian: zone-restricted patrol, shadow safe-zone logic','Ravager: group behavior, proximity clustering, obstacle destruction'] },
-{ name:'Boss Logic', tasks:['Level 1 Golem: sleep to awaken to charge to grapple-defeat to die','Goblin King Phase 1: seesaw projectile reflect','Goblin King Phase 2: bellow stun, builder repair cycle','Goblin King Phase 3: sword shockwave','Bat Queen Phase A: swarm command + sound-shield','Bat Queen Phase B: aerial pursuit, grapple-reach requirement','Bat Queen Phase C: slow solo combat, collapse on defeat'] },
-{ name:'Level 3 Sound System', tasks:['Noise event emitter (bells, debris, drums, echo crystals)','Bat nest fright trigger and swarm redirect logic','Swarm-as-temporary-platform system','Enemy shield disruption via sound event','Hidden path reveal via sound interaction'] },
-{ name:'Game Systems', tasks:['Health system + extra life heart pieces','Checkpoint save and respawn system','Key + lock mechanic (3-key gate, Level 2)','Collectible tracking (dog items: collar, ball, hearts)','HUD: health display, grapple indicator','Pause menu and settings','Save / load system'] },
-]},
-{ id:'lighting', num:'07', title:'Lighting & Atmosphere', subtitle:'VFX, Sound, Music', groups:[
-{ name:'Lighting', tasks:['Level 1: dim warm torch ambience, muted palette','Level 2: sparse blue torches, deep cavern shadow','Level 3: near-dark with bioluminescent cracks and belfry light shafts','Dynamic shadow pass - all 3 levels','Boss arena lighting drama pass (all 3 bosses)','Secret room lighting (warm pink glow for heart rooms)'] },
-{ name:'Visual FX', tasks:['Grapple hook travel VFX + hook impact spark','Dust particles on landing and wall break','Bat swarm particle system (standard + giant)','Wind current visual for Bat Queen arena','Enemy alert VFX: (!) icon and stealth detection pulse','Sound wave ring visualization (Level 3)','Collapse/destruction debris particles','Morning light shaft VFX (final Level 3 exit)'] },
-{ name:'Ambient Sound Design', tasks:['Level 1: chains, echoes, dripping water, distant groan','Level 2: bone rattle, goblin chatter, cave wind','Level 3: bat wings, bell resonance, wind gusts, whispers','Player breathing intensity layer (calm to danger)','Dog bark audio at all trigger points','Enemy footstep audio per type','Echo Monster audio aggro cue system'] },
-{ name:'Music', tasks:['Main theme composition','Level 1 music: sparse, disorienting, piano/strings','Level 2 music: rage-driven, tribal percussion + distortion','Level 3 music: oppressive to building to emotional release','Golem Boss theme','Goblin King Boss theme (3-phase escalation)','Bat Queen Boss theme: swarm / aerial / silence phases','Bat Queen Phase C: soft, slow, melancholic arrangement','Final escape sequence: wind only, near-silence design','Dynamic layer system: calm to alert to combat transitions'] },
-]},
-{ id:'testing', num:'08', title:'Testing & Iteration', subtitle:'Playtesting & Bug Fixing', groups:[
-{ name:'Playtesting', tasks:['Internal full playthroughs - all 3 levels','Identify stuck points or broken puzzle logic','Grapple feel pass: momentum, feedback, satisfaction','Enemy fairness review: can player always react in time?','Boss difficulty tuning - all 3 bosses','Collectible accessibility audit','External playtest session - observe new players unassisted','Review onboarding: is Level 1 tutorial clear without text?'] },
-{ name:'Bug Fixing', tasks:['Critical bugs (softlocks, crashes, out-of-bounds)','High priority (puzzle breaks, AI failures, missing audio)','Medium priority (visual glitches, animation pops, clipping)','Low priority (minor audio cut-offs, cosmetic issues)'] },
-{ name:'Balancing', tasks:['Difficulty curve validation across full 3-level run','Player death heatmap review and analysis','HP and damage number tuning','Puzzle timing windows: too tight vs too forgiving','Enemy density review per zone'] },
-]},
-{ id:'optimization', num:'09', title:'Optimization', subtitle:'Performance & Final Polish', groups:[
-{ name:'Rendering', tasks:['LOD setup for all characters and environment pieces','Polygon reduction pass - background / distant assets','Occlusion culling setup','Draw call batching pass','Texture atlasing where applicable'] },
-{ name:'Lighting & VFX', tasks:['Bake static lighting for non-dynamic zones','VFX particle budget review and cap','Shadow quality settings per platform tier (high/med/low)'] },
-{ name:'Performance Targets', tasks:['Hit 60fps target on minimum spec PC','Console performance validation (if applicable)','Memory profiling - identify and fix leaks','Loading time optimization (async streaming)','Final build size reduction and compression'] },
-]},
-];
-
-// ─── STATE ────────────────────────────────────────────────────────────────────
-const SID = Math.random().toString(36).slice(2,8).toUpperCase();
-const COLORS = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4a9c','#30c8c8','#c87040','#7cc740'];
-const MY_COLOR = COLORS[Math.floor(Math.random()*COLORS.length)];
-let state={}, db, stateRef, currentId='overview', dStatus='todo', dCtx=null;
-
-const $=id=>document.getElementById(id);
-
-function badge(s,lbl){
-const b=$('syncBadge'),l=$('syncLabel');
-b.className='sync-badge '+s;
-l.textContent=lbl||{syncing:'Syncing...',synced:'Synced',live:'Live',offline:'Offline'}[s]||s;
-}
-
-function toast(msg,dur=2800){
-const c=$('toastContainer'),el=document.createElement('div');
-el.className='toast'; el.textContent=msg; c.appendChild(el);
-setTimeout(()=>{el.classList.add('fadeout');setTimeout(()=>el.remove(),400);},dur);
-}
-
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
-function initFirebase(){
-try{
-const app=initializeApp(firebaseConfig);
-db=getDatabase(app);
-stateRef=ref(db,'pipeline/state');
-badge('syncing');
-onValue(stateRef,snap=>{
-state=snap.val()||{};
-show(currentId); updateStats();
-badge('live','Live');
-$('lastSync').textContent='Live - '+new Date().toLocaleTimeString();
-});
-heartbeat();
-setInterval(heartbeat,15000);
-setInterval(cleanPresence,30000);
-toast('Connected - You are '+SID);
-}catch(e){
-console.error(e); badge('offline'); toast('Firebase error - check console');
-}
-}
-
-async function persist(patch){
-Object.assign(state,patch);
-if(!db){show(currentId);updateStats();return;}
-try{badge('syncing');await update(stateRef,patch);}
-catch(e){badge('offline');toast('Save failed');}
-}
-
-async function heartbeat(){
-if(!db)return;
-try{
-await set(ref(db,'pipeline/presence/'+SID),{id:SID,color:MY_COLOR,ts:Date.now()});
-const snap=await get(ref(db,'pipeline/presence'));
-const all=snap.val()||{};
-const active=Object.values(all).filter(u=>Date.now()-u.ts<45000);
-const el=$('collabAvatars');
-if(el) el.innerHTML=active.map(u=>`<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`).join('');
-if(active.length>1) badge('live',active.length+' Online');
-}catch(e){}
-}
-
-async function cleanPresence(){
-if(!db)return;
-try{
-const snap=await get(ref(db,'pipeline/presence'));
-const all=snap.val()||{},updates={};
-for(const[k,v] of Object.entries(all)) if(Date.now()-v.ts>60000) updates['pipeline/presence/'+k]=null;
-if(Object.keys(updates).length) await update(ref(db),updates);
-}catch(e){}
-}
-
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function fk(p,g,t){return p+'|||'+g+'|||'+btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g,'_');}
-function getMeta(p,g,t){return state[fk(p,g,t)]||{};}
-function getS(p,g,t){return getMeta(p,g,t).status||'todo';}
-async function setMeta(p,g,t,m){const k=fk(p,g,t),patch={};patch[k]={...getMeta(p,g,t),...m};await persist(patch);}
-
-function resolvedTasks(phId,gName,rawTasks){
-const renames = state['__renames__'+phId+'__'+gName] || {};
-const deleted = state['__deleted__'+phId+'__'+gName] || {};
-// deleted is a Firebase-safe object: { encodedKey: 1, ... }
-const deletedOriginals = new Set(Object.keys(deleted));
-const deletedRenamed = new Set(Object.values(deleted).filter(v=>typeof v==='string'));
-return rawTasks
-.filter(t => !deletedOriginals.has(t)) // remove if original name is deleted
-.map(t => renames[t] || t) // apply rename
-.filter(t => !deletedRenamed.has(t)); // remove if renamed version is deleted
-}
-
-function pStats(ph){
-if(ph.isOverview)return{done:0,inprog:0,total:0};
-let d=0,i=0,to=0;
-for(const g of ph.groups){
-const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
-const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
-for(const t of all){to++;const s=getS(ph.id,g.name,t);if(s==='done')d++;else if(s==='inprogress')i++;}
-}
-return{done:d,inprog:i,total:to};
-}
-
-function allStats(){let d=0,i=0,t=0;for(const p of PHASES){if(p.isOverview)continue;const s=pStats(p);d+=s.done;i+=s.inprog;t+=s.total;}return{done:d,inprog:i,total:t};}
-function cyc(c){return{todo:'inprogress',inprogress:'review',review:'done',done:'blocked',blocked:'todo'}[c]||'todo';}
-function ico(s){return{todo:'',inprogress:'◑',review:'◐',done:'✓',blocked:'✕'}[s]||'';}
-function slbl(s){return{todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'}[s]||'To Do';}
-function scls(s){return{todo:'btn-todo',inprogress:'btn-inprogress',review:'btn-review',done:'btn-done',blocked:'btn-blocked'}[s]||'btn-todo';}
-function tflbl(v){return{'1-2h':'1-2h','half-day':'half day','1d':'1d','2-3d':'2-3d','1w':'1wk','2w':'2wk','1m':'1mo','ongoing':'ongoing'}[v]||v;}
-
-function pills(meta){
-let p='';
-if(meta.assignee) p+=`<span class="task-pill pill-assign">&#9876; ${meta.assignee}</span>`;
-if(meta.timeframe) p+=`<span class="task-pill pill-time">&#9719; ${tflbl(meta.timeframe)}</span>`;
-return p;
-}
-
-// ─── RENDER ───────────────────────────────────────────────────────────────────
-function renderSidebar(aid){
-let h='<div class="sidebar-section-title">Navigation</div>';
-for(const p of PHASES){
-const s=p.isOverview?null:pStats(p);
-const pct=s?(s.total?Math.round(s.done/s.total*100):0):null;
-h+=`<button class="phase-btn ${aid===p.id?'active':''}" onclick="APP.show('${p.id}')"><span class="phase-num">${p.num}</span><span>${p.title}</span>${s?`<span class="phase-mini-progress">${pct}%</span>`:''}</button>`;
-}
-$('sidebar').innerHTML=h;
-}
-
-function renderOverview(){
-const s=allStats(),pct=s.total?Math.round(s.done/s.total*100):0;
-let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">&#9733; Master View</div><div class="panel-title">Labyrinth Of Grief</div><div class="panel-subtitle">Full game development pipeline</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div></div><div class="legend"><div class="legend-item"><div class="legend-dot" style="background:var(--text-dim)"></div>To Do</div><div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>In Progress</div><div class="legend-item"><div class="legend-dot" style="background:var(--blue-bright)"></div>Review</div><div class="legend-item"><div class="legend-dot" style="background:var(--green-bright)"></div>Done</div><div class="legend-item"><div class="legend-dot" style="background:var(--blocked-bright)"></div>Blocked</div></div><div class="overview-grid">`;
-for(const p of PHASES){
-if(p.isOverview)continue;
-const ps=pStats(p),pp=ps.total?Math.round(ps.done/ps.total*100):0;
-h+=`<div class="overview-card" onclick="APP.show('${p.id}')"><div class="card-progress-bar" style="width:${pp}%"></div><div class="card-num">${p.num}</div><div class="card-title">${p.title}</div><div class="card-pct">${pp}%</div><div class="card-tasks">${ps.done}/${ps.total} tasks &middot; ${ps.inprog} active</div></div>`;
-}
-return h+'</div>';
-}
-
-function renderPhase(ph){
-const s=pStats(ph),pct=s.total?Math.round(s.done/s.total*100):0;
-let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">Phase ${ph.num}</div><div class="panel-title">${ph.title}</div><div class="panel-subtitle">${ph.subtitle}</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">${s.done}/${s.total}</div></div></div>`;
-for(const g of ph.groups){
-const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
-const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
-const gd=all.filter(t=>getS(ph.id,g.name,t)==='done').length;
-const ge=encodeURIComponent(g.name);
-h+=`<div class="task-group"><div class="task-group-header"><span>${g.name}</span><span class="group-count">${gd}/${all.length}</span></div>`;
-for(const t of all){
-const ts=getS(ph.id,g.name,t),meta=getMeta(ph.id,g.name,t),te=encodeURIComponent(t);
-h+=`<div class="task-item ${ts}" onclick="APP.openDrawer('${ph.id}','${ge}','${te}')"><div class="task-check" onclick="event.stopPropagation();APP.doToggle('${ph.id}','${ge}','${te}')">${ico(ts)}</div><div class="task-text">${t}</div><div class="task-meta-pills">${pills(meta)}</div><button class="task-status-btn ${scls(ts)}" onclick="event.stopPropagation();APP.doCyc('${ph.id}','${ge}','${te}')">${slbl(ts)}</button></div>`;
-}
-h+=`<div class="add-task-row"><input class="add-task-input" type="text" placeholder="Add task to ${g.name}..." id="ni-${ph.id}-${ge}" onkeydown="if(event.key==='Enter')APP.doAdd('${ph.id}','${ge}')"><button class="add-task-btn-sm" onclick="APP.doAdd('${ph.id}','${ge}')">+ Add</button></div></div>`;
-}
-h+=`<div class="notes-section"><div class="notes-label">Phase Notes</div><textarea class="notes-input" placeholder="Notes, blockers, decisions..." onchange="APP.doNote('${ph.id}',this.value)">${state['__note__'+ph.id]||''}</textarea></div>`;
-
-return h;
-}
-
-// ─── ACTIONS ──────────────────────────────────────────────────────────────────
-function show(id){currentId=id;$(‘main-content’).innerHTML=id===‘overview’?renderOverview():renderPhase(PHASES.find(p=>p.id===id));renderSidebar(id);updateStats();}
-function updateStats(){const s=allStats(),p=s.total?Math.round(s.done/s.total*100):0;$(‘stat-done’).textContent=s.done;$(‘stat-inprog’).textContent=s.inprog;$(‘stat-total’).textContent=s.total;$(‘global-fill’).style.width=p+’%’;$(‘global-pct’).textContent=p+’%’;}
-async function doToggle(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:getS(pid,g,t)===‘done’?‘todo’:‘done’});}
-async function doCyc(pid,ge,te){const g=decodeURIComponent(ge),t=decodeURIComponent(te);await setMeta(pid,g,t,{status:cyc(getS(pid,g,t))});}
-async function doAdd(pid,ge){
-const g=decodeURIComponent(ge),inp=$(‘ni-’+pid+’-’+ge);
-if(!inp)return;const v=inp.value.trim();if(!v)return;
-const ck=’**custom**’+pid+’__’+g,existing=state[ck]||{},idx=Object.keys(existing).length,patch={};
-patch[ck]={…existing,[idx]:v};await persist(patch);inp.value=’’;
-}
-async function doNote(pid,val){const patch={};patch[’**note**’+pid]=val;await persist(patch);}
-
-// ─── DRAWER ───────────────────────────────────────────────────────────────────
-const STATUSES=[‘todo’,‘inprogress’,‘review’,‘done’,‘blocked’];
-const SNAMES={todo:‘To Do’,inprogress:‘In Progress’,review:‘Review’,done:‘Done’,blocked:‘Blocked’};
-
-function openDrawer(pid,ge,te){
-const g=decodeURIComponent(ge),t=decodeURIComponent(te);
-dCtx={pid,g,t};
-const meta=getMeta(pid,g,t),ph=PHASES.find(p=>p.id===pid);
-$(‘dPhaseTag’).textContent=‘Phase ‘+(ph?.num||’’)+’ - ‘+(ph?.title||’’);
-$(‘dTaskNameDisplay’).textContent=t;
-$(‘dTaskName’).value=t;
-$(‘dAssignee’).value=meta.assignee||’’;
-$(‘dTimeframe’).value=meta.timeframe||’’;
-$(‘dNotes’).value=meta.notes||’’;
-dStatus=meta.status||‘todo’;
-renderStatusChips();
-$(‘drawerOverlay’).classList.add(‘open’);
-$(‘drawer’).classList.add(‘open’);
-$(‘dTaskName’).focus();
-}
-
-function closeDrawer(){$(‘drawerOverlay’).classList.remove(‘open’);$(‘drawer’).classList.remove(‘open’);dCtx=null;}
-
-function renderStatusChips(){
-$(‘dStatusRow’).innerHTML=STATUSES.map(s=>`<div class="status-chip chip-${s}${dStatus===s?' sel':''}" onclick="APP.selStatus('${s}')">${SNAMES[s]}</div>`).join(’’);
-}
-
-function selStatus(s){dStatus=s;renderStatusChips();}
-
-async function saveDrawer(){
-if(!dCtx)return;
-const{pid,g,t}=dCtx;
-const newName=($(‘dTaskName’).value||’’).trim()||t;
-const meta={status:dStatus,assignee:$(‘dAssignee’).value.trim(),timeframe:$(‘dTimeframe’).value,notes:$(‘dNotes’).value.trim()};
-if(newName!==t){
-const patch={};
-patch[fk(pid,g,newName)]={…getMeta(pid,g,t),…meta};
-patch[fk(pid,g,t)]=null;
-const ck=’**custom**’+pid+’**’+g,rk=’**renames**’+pid+’**’+g;
-const customList=state[ck]?{…state[ck]}:null;
-const customEntry=customList&&Object.entries(customList).find(([,v])=>v===t);
-if(customEntry){customList[customEntry[0]]=newName;patch[ck]=customList;}
-else{
-const cr={…(state[rk]||{})};
-let found=false;
-for(const[orig,renamed] of Object.entries(cr)){if(renamed===t){cr[orig]=newName;found=true;break;}}
-if(!found)cr[t]=newName;
-patch[rk]=cr;
-}
-await persist(patch);
-} else {
-await setMeta(pid,g,t,meta);
-}
-closeDrawer();show(currentId);toast(‘Task updated’);
-}
-
-async function deleteTask() {
-if (!dCtx) return;
-const { pid, g, t } = dCtx;
-
-if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
-
-const avatars = $(‘collabAvatars’);
-if (avatars && avatars.children.length > 1) {
-if (!confirm(“There are multiple people online right now.\nReally delete this task for everyone?”)) return;
-}
-
-const patch = {};
-
-// 1. Remove task metadata
-patch[fk(pid, g, t)] = null;
-
-const ck = ‘**custom**’ + pid + ‘**’ + g;
-const rk = ‘**renames**’ + pid + ’**’ + g;
-const dk = ‘**deleted**’ + pid + ‘__’ + g;
-
-// 2. Check if this is a custom (user-added) task
-const customList = state[ck] ? { …state[ck] } : null;
-const customEntry = customList && Object.entries(customList).find(([, v]) => v === t);
-
-if (customEntry) {
-// Custom task — remove from custom list
-delete customList[customEntry[0]];
-patch[ck] = Object.keys(customList).length ? customList : null;
-} else {
-// Built-in task — find its original name (before any rename)
-const renames = state[rk] || {};
-let originalName = t;
-for (const [orig, renamed] of Object.entries(renames)) {
-if (renamed === t) { originalName = orig; break; }
-}
-
-```
-// Clean up rename entry if it exists
-if (state[rk]) {
-const newRenames = { ...renames };
-delete newRenames[originalName];
-patch[rk] = Object.keys(newRenames).length ? newRenames : null;
-}
-
-// Mark original name as deleted — store as object key so Firebase keeps it
-const existing = state[dk] || {};
-patch[dk] = { ...existing, [originalName]: 1 };
-```
-
-}
-
-try {
-await persist(patch);
-closeDrawer();
-show(currentId);
-toast(‘Task permanently deleted’);
-} catch (err) {
-console.error(err);
-toast(‘Delete failed - check console’);
-}
-}
-
-window.APP={show,openDrawer,closeDrawer,doToggle,doCyc,doAdd,doNote,selStatus,saveDrawer,deleteTask};
-
-// ─── BOOT ─────────────────────────────────────────────────────────────────────
-function boot(){renderSidebar(‘overview’);show(‘overview’);initFirebase();}
-if(document.readyState===‘loading’){document.addEventListener(‘DOMContentLoaded’,boot);}else{boot();}
-</script>
-
-</body>
-</html>
