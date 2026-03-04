@@ -310,24 +310,73 @@ async function saveDrawer() {
 }
 
 async function deleteTask() {
-  if (!dCtx) return;
-  const { pid, g, t } = dCtx;
+  if (!dCtx) {
+    console.error("deleteTask: dCtx is null or undefined");
+    toast("Cannot delete – internal error (check console)");
+    return;
+  }
 
-  if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
+  const { pid, g, t } = dCtx;
+  console.log("deleteTask called →", { pid, g, t });
+
+  if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) {
+    console.log("User cancelled delete");
+    return;
+  }
 
   const patch = {};
-  patch[fk(pid, g, t)] = null;
+  const taskKey = fk(pid, g, t);
+  patch[taskKey] = null;
+  console.log("Removing task key:", taskKey);
 
+  // custom tasks cleanup
   const ck = '__custom__' + pid + '__' + g;
   if (state[ck]) {
     const custom = { ...state[ck] };
-    const entry = Object.entries(custom).find(([,v]) => v === t);
+    const entry = Object.entries(custom).find(([, value]) => value === t);
     if (entry) {
+      console.log("Removing from custom list, index:", entry[0]);
       delete custom[entry[0]];
       patch[ck] = Object.keys(custom).length ? custom : null;
     }
   }
 
+  // renames cleanup
+  const rk = '__renames__' + pid + '__' + g;
+  if (state[rk]) {
+    const renames = { ...state[rk] };
+    let changed = false;
+    for (const [orig, cur] of Object.entries(renames)) {
+      if (cur === t) {
+        console.log("Clearing rename entry:", orig, "→", t);
+        delete renames[orig];
+        changed = true;
+        break;
+      }
+    }
+    if (!changed && renames[t]) {
+      console.log("Clearing direct rename:", t);
+      delete renames[t];
+      changed = true;
+    }
+    if (changed) {
+      patch[rk] = Object.keys(renames).length ? renames : null;
+    }
+  }
+
+  console.log("Final patch being sent:", patch);
+
+  try {
+    await persist(patch);
+    console.log("persist() completed successfully");
+    closeDrawer();
+    show(currentId);
+    toast('🗑 Task permanently deleted');
+  } catch (err) {
+    console.error("Delete failed:", err);
+    toast('Delete failed – check console');
+  }
+}
   const rk = '__renames__' + pid + '__' + g;
   if (state[rk]) {
     const renames = { ...state[rk] };
@@ -369,3 +418,4 @@ window.APP = {
 </script>
 </body>
 </html>
+
