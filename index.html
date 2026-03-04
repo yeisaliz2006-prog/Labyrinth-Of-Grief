@@ -188,7 +188,7 @@ textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
 <!-- DRAWER -->
 <div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
 <div class="drawer" id="drawer">
-  <button class="drawer-close-btn" onclick="APP.closeDrawer()">&#x2715;</button>
+  <button class="drawer-close-btn" onclick="APP.closeDrawer()">✕</button>
   <div class="drawer-header">
     <div class="drawer-phase-tag" id="dPhaseTag"></div>
     <div class="drawer-task-name" id="dTaskNameDisplay"></div>
@@ -196,15 +196,15 @@ textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
   </div>
   <div class="drawer-body">
     <div class="drawer-field">
-      <label class="drawer-label">&#x270E; Task Name</label>
+      <label class="drawer-label">✎ Task Name</label>
       <input class="di" id="dTaskName" placeholder="Task name…" autocomplete="off">
     </div>
     <div class="drawer-field">
-      <label class="drawer-label">&#x2694; Assignee</label>
+      <label class="drawer-label">⚔ Assignee</label>
       <input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
     </div>
     <div class="drawer-field">
-      <label class="drawer-label">&#x25F7; Estimated Timeframe</label>
+      <label class="drawer-label">◷ Estimated Timeframe</label>
       <select class="di" id="dTimeframe">
         <option value="">— Select estimate —</option>
         <option value="1-2h">1–2 hours</option>
@@ -218,7 +218,7 @@ textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
       </select>
     </div>
     <div class="drawer-field">
-      <label class="drawer-label">&#x2726; Notes & Details</label>
+      <label class="drawer-label">✦ Notes & Details</label>
       <textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links…"></textarea>
     </div>
   </div>
@@ -247,6 +247,7 @@ const firebaseConfig = {
   appId: "1:148640942330:web:8f091f07193cd434bba143"
 };
 
+// ─── PHASES (your original data - unchanged) ────────────────────────────────
 const PHASES = [
   { id:'overview', num:'★', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
   { id:'preproduction', num:'01', title:'Pre-Production', subtitle:'Concept & Planning', groups:[
@@ -255,9 +256,11 @@ const PHASES = [
     { name:'References & Moodboards', tasks:['Moodboard: Level 1 visual tone (stone dungeon)','Moodboard: Level 2 visual tone (bone cavern)','Moodboard: Level 3 visual tone (cathedral/belfry)','Reference games: movement feel (Celeste, Hollow Knight)','Reference games: dungeon design (Dark Souls, Limbo)'] },
     { name:'Narrative Design', tasks:['Write amnesia arc beats — what fragments does player recover?','Design dog-rescue emotional payoff moments','NPC design: village character with missing cat','Memory shard content (lore per boss defeat)','Final escape sequence narrative scripting'] },
   ]},
-  // ... (the rest of your PHASES array remains exactly the same – I didn't paste it all here to save space)
+  // ... (add the rest of your PHASES array here - keep exactly as in your original code)
+  // I shortened it here so the message isn't too long - paste your full array
 ];
 
+// ─── STATE & GLOBALS ────────────────────────────────────────────────────────
 const SID = Math.random().toString(36).slice(2,8).toUpperCase();
 const COLORS = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4a9c','#30c8c8','#c87040','#7cc740'];
 const MY_COLOR = COLORS[Math.floor(Math.random()*COLORS.length)];
@@ -271,6 +274,7 @@ let pendingWrites = 0;
 
 const $ = id => document.getElementById(id);
 
+// ─── UI HELPERS ─────────────────────────────────────────────────────────────
 function badge(s, lbl) {
   const b = $('syncBadge'), l = $('syncLabel');
   b.className = 'sync-badge ' + s;
@@ -283,7 +287,7 @@ function toast(msg, dur=2800) {
   setTimeout(()=>{el.classList.add('fadeout');setTimeout(()=>el.remove(),400);}, dur);
 }
 
-// ─── FIREBASE ────────────────────────────────────────────────────────────────
+// ─── FIREBASE ───────────────────────────────────────────────────────────────
 function initFirebase() {
   try {
     const app = initializeApp(firebaseConfig);
@@ -294,7 +298,7 @@ function initFirebase() {
 
     onValue(stateRef, snap => {
       if (pendingWrites > 0) {
-        console.log('[sync] Skipping snapshot - writes pending');
+        console.log('[sync] Skipping stale snapshot - pending writes:', pendingWrites);
         return;
       }
       state = snap.val() || {};
@@ -320,7 +324,7 @@ async function persist(patch) {
 
   pendingWrites++;
 
-  // optimistic update
+  // Optimistic update
   Object.assign(state, patch);
   show(currentId);
   updateStats();
@@ -333,10 +337,10 @@ async function persist(patch) {
   try {
     badge('syncing');
     await update(stateRef, patch);
-  } catch(e) {
-    console.error('persist failed', e);
+  } catch (e) {
+    console.error('persist failed:', e);
     badge('offline');
-    toast('Save failed');
+    toast('Save failed – check connection');
   } finally {
     pendingWrites = Math.max(0, pendingWrites - 1);
     if (pendingWrites === 0) badge('live');
@@ -346,12 +350,11 @@ async function persist(patch) {
 async function heartbeat() {
   if (!db) return;
   try {
-    await set(ref(db, 'pipeline/presence/' + SID), {id:SID, color:MY_COLOR, ts:Date.now()});
+    await set(ref(db, 'pipeline/presence/' + SID), { id:SID, color:MY_COLOR, ts:Date.now() });
     const snap = await get(presenceRef);
     const all = snap.val() || {};
     const active = Object.values(all).filter(u => Date.now() - u.ts < 45000);
-    const el = $('collabAvatars');
-    if (el) el.innerHTML = active.map(u =>
+    $('collabAvatars').innerHTML = active.map(u =>
       `<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`
     ).join('');
     if (active.length > 1) badge('live', active.length + ' Online');
@@ -363,242 +366,188 @@ async function cleanPresence() {
   try {
     const snap = await get(presenceRef);
     const all = snap.val() || {}, updates = {};
-    for (const [k,v] of Object.entries(all)) {
+    for (const [k, v] of Object.entries(all)) {
       if (Date.now() - v.ts > 60000) updates['pipeline/presence/' + k] = null;
     }
     if (Object.keys(updates).length) await update(ref(db), updates);
   } catch(e) {}
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-function fk(p,g,t){return p+'|||'+g+'|||'+btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g,'_');}
-function getMeta(p,g,t){return state[fk(p,g,t)]||{};}
-function getS(p,g,t){return getMeta(p,g,t).status||'todo';}
-async function setMeta(p,g,t,m){const k=fk(p,g,t),patch={};patch[k]={...getMeta(p,g,t),...m};await persist(patch);}
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+// (your original helper functions - fk, getMeta, getS, setMeta, resolvedTasks, pStats, allStats, cyc, ico, slbl, scls, tflbl, pills)
+// Paste your original versions here - they are unchanged
 
-function resolvedTasks(phId,gName,rawTasks){
-  const renames=state['__renames__'+phId+'__'+gName]||{};
-  return rawTasks.map(t=>renames[t]||t).filter(t=>t!=='__DELETED__');
-}
+// ─── RENDER FUNCTIONS ───────────────────────────────────────────────────────
+// (your original renderSidebar, renderOverview, renderPhase - unchanged)
+// Paste your original versions here
 
-function pStats(ph){
-  if(ph.isOverview)return{done:0,inprog:0,total:0};
-  let d=0,i=0,to=0;
-  for(const g of ph.groups){
-    const custom=state['__custom__'+ph.id+'__'+g.name]?Object.values(state['__custom__'+ph.id+'__'+g.name]):[];
-    const all=[...resolvedTasks(ph.id,g.name,g.tasks),...custom];
-    for(const t of all){to++;const s=getS(ph.id,g.name,t);if(s==='done')d++;else if(s==='inprogress')i++;}
-  }
-  return{done:d,inprog:i,total:to};
-}
+// ─── ACTIONS ────────────────────────────────────────────────────────────────
+// (your original doToggle, doCyc, doAdd, doNote - unchanged)
+// Paste your original versions here
 
-function allStats(){let d=0,i=0,t=0;for(const p of PHASES){if(p.isOverview)continue;const s=pStats(p);d+=s.done;i+=s.inprog;t+=s.total;}return{done:d,inprog:i,total:t};}
+// ─── DRAWER LOGIC ───────────────────────────────────────────────────────────
+const STATUSES = ['todo','inprogress','review','done','blocked'];
+const SNAMES = {todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'};
 
-function cyc(c){return{todo:'inprogress',inprogress:'review',review:'done',done:'blocked',blocked:'todo'}[c]||'todo';}
-function ico(s){return{todo:'',inprogress:'◑',review:'◐',done:'✓',blocked:'✕'}[s]||'';}
-function slbl(s){return{todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'}[s]||'To Do';}
-function scls(s){return{todo:'btn-todo',inprogress:'btn-inprogress',review:'btn-review',done:'btn-done',blocked:'btn-blocked'}[s]||'btn-todo';}
-function tflbl(v){return{'1-2h':'1-2h','half-day':'½ day','1d':'1d','2-3d':'2-3d','1w':'1 wk','2w':'2 wk','1m':'1 mo','ongoing':'ongoing'}[v]||v;}
-function pills(meta){
-  let p='';
-  if(meta.assignee) p+=`<span class="task-pill pill-assign">⚔ ${meta.assignee}</span>`;
-  if(meta.timeframe) p+=`<span class="task-pill pill-time">◷ ${tflbl(meta.timeframe)}</span>`;
-  return p;
-}
-
-// ─── RENDER ──────────────────────────────────────────────────────────────────
-function renderSidebar(aid){
-  let h='<div class="sidebar-section-title">Navigation</div>';
-  for(const p of PHASES){
-    const s=p.isOverview?null:pStats(p);
-    const pct=s?(s.total?Math.round(s.done/s.total*100):0):null;
-    h+=`<button class="phase-btn ${aid===p.id?'active':''}" onclick="APP.show('${p.id}')"><span class="phase-num">${p.num}</span><span>${p.title}</span>${s?`<span class="phase-mini-progress">${pct}%</span>`:''}</button>`;
-  }
-  $('sidebar').innerHTML=h;
-}
-
-function renderOverview(){
-  const s=allStats(),pct=s.total?Math.round(s.done/s.total*100):0;
-  let h=`<div class="panel-header"><div class="panel-header-left"><div class="phase-tag">★ Master View</div><div class="panel-title">Labyrinth Of Grief</div><div class="panel-subtitle">Full game development pipeline</div></div><div class="phase-progress-ring"><div class="ring-pct">${pct}%</div><div class="ring-label">Complete</div></div></div><div class="legend">...`; // your original legend
-  // ... keep your full renderOverview code here
-  return h + '</div>';
-}
-
-// (keep renderPhase exactly as in your original code)
-
-function show(id){
-  currentId=id;
-  $('main-content').innerHTML = id==='overview' ? renderOverview() : renderPhase(PHASES.find(p=>p.id===id));
-  renderSidebar(id);
-  updateStats();
-}
-
-function updateStats(){
-  const s=allStats(),p=s.total?Math.round(s.done/s.total*100):0;
-  $('stat-done').textContent=s.done;
-  $('stat-inprog').textContent=s.inprog;
-  $('stat-total').textContent=s.total;
-  $('global-fill').style.width=p+'%';
-  $('global-pct').textContent=p+'%';
-}
-
-// ─── ACTIONS ─────────────────────────────────────────────────────────────────
-async function doToggle(pid,ge,te){
-  const g=decodeURIComponent(ge),t=decodeURIComponent(te);
-  await setMeta(pid,g,t,{status:getS(pid,g,t)==='done'?'todo':'done'});
-}
-
-async function doCyc(pid,ge,te){
-  const g=decodeURIComponent(ge),t=decodeURIComponent(te);
-  await setMeta(pid,g,t,{status:cyc(getS(pid,g,t))});
-}
-
-async function doAdd(pid,ge){
-  const g=decodeURIComponent(ge),inp=$('ni-'+pid+'-'+ge);
-  if(!inp)return;const v=inp.value.trim();if(!v)return;
-  const ck='__custom__'+pid+'__'+g,existing=state[ck]||{},idx=Object.keys(existing).length,patch={};
-  patch[ck]={...existing,[idx]:v};await persist(patch);inp.value='';
-}
-
-async function doNote(pid,val){
-  const patch={};patch['__note__'+pid]=val;await persist(patch);
-}
-
-// ─── DRAWER ──────────────────────────────────────────────────────────────────
-const STATUSES=['todo','inprogress','review','done','blocked'];
-const SNAMES={todo:'To Do',inprogress:'In Progress',review:'Review',done:'Done',blocked:'Blocked'};
-
-function openDrawer(pid,ge,te){
-  const g=decodeURIComponent(ge),t=decodeURIComponent(te);
-  dCtx={pid,g,t};
-  const meta=getMeta(pid,g,t),ph=PHASES.find(p=>p.id===pid);
-  $('dPhaseTag').textContent='Phase '+(ph?.num||'')+' — '+(ph?.title||'');
-  $('dTaskNameDisplay').textContent=t;
-  $('dTaskName').value=t;
-  $('dAssignee').value=meta.assignee||'';
-  $('dTimeframe').value=meta.timeframe||'';
-  $('dNotes').value=meta.notes||'';
-  dStatus=meta.status||'todo';
+function openDrawer(pid, ge, te) {
+  const g = decodeURIComponent(ge), t = decodeURIComponent(te);
+  dCtx = { pid, g, t };
+  const meta = getMeta(pid, g, t), ph = PHASES.find(p => p.id === pid);
+  $('dPhaseTag').textContent = 'Phase ' + (ph?.num || '') + ' — ' + (ph?.title || '');
+  $('dTaskNameDisplay').textContent = t;
+  $('dTaskName').value = t;
+  $('dAssignee').value = meta.assignee || '';
+  $('dTimeframe').value = meta.timeframe || '';
+  $('dNotes').value = meta.notes || '';
+  dStatus = meta.status || 'todo';
   renderStatusChips();
   $('drawerOverlay').classList.add('open');
   $('drawer').classList.add('open');
-  $('dTaskName').focus();
 }
 
-function closeDrawer(){$('drawerOverlay').classList.remove('open');$('drawer').classList.remove('open');dCtx=null;}
+function closeDrawer() {
+  $('drawerOverlay').classList.remove('open');
+  $('drawer').classList.remove('open');
+  dCtx = null;
+}
 
-function renderStatusChips(){
-  $('dStatusRow').innerHTML=STATUSES.map(s=>
+function renderStatusChips() {
+  $('dStatusRow').innerHTML = STATUSES.map(s =>
     `<div class="status-chip chip-${s}${dStatus===s?' sel':''}" onclick="APP.selStatus('${s}')">${SNAMES[s]}</div>`
   ).join('');
 }
 
-function selStatus(s){dStatus=s;renderStatusChips();}
+function selStatus(s) { dStatus = s; renderStatusChips(); }
 
-async function saveDrawer(){
-  if(!dCtx)return;
-  const {pid,g,t}=dCtx;
-  const newName=($('dTaskName').value||'').trim()||t;
-  const meta={status:dStatus,assignee:$('dAssignee').value.trim(),timeframe:$('dTimeframe').value,notes:$('dNotes').value.trim()};
-  
-  if(newName!==t){
-    const patch={};
-    patch[fk(pid,g,newName)]={...getMeta(pid,g,t),...meta};
-    patch[fk(pid,g,t)]=null;
-    const ck='__custom__'+pid+'__'+g,rk='__renames__'+pid+'__'+g;
-    if(state[ck]){
-      const custom={...state[ck]};
-      const entry=Object.entries(custom).find(([,v])=>v===t);
-      if(entry){custom[entry[0]]=newName;patch[ck]=custom;}
-    } else {
-      const renames={...(state[rk]||{})};
-      let found=false;
-      for(const[orig,renamed] of Object.entries(renames)){
-        if(renamed===t){renames[orig]=newName;found=true;break;}
+async function saveDrawer() {
+  if (!dCtx) return;
+  const { pid, g, t } = dCtx;
+  const newName = ($('dTaskName').value || '').trim() || t;
+  const meta = {
+    status: dStatus,
+    assignee: $('dAssignee').value.trim(),
+    timeframe: $('dTimeframe').value,
+    notes: $('dNotes').value.trim(),
+  };
+
+  if (newName !== t) {
+    const patch = {};
+    patch[fk(pid, g, newName)] = { ...getMeta(pid, g, t), ...meta };
+    patch[fk(pid, g, t)] = null;
+
+    const ck = '__custom__' + pid + '__' + g;
+    const rk = '__renames__' + pid + '__' + g;
+
+    if (state[ck]) {
+      const custom = { ...state[ck] };
+      const entry = Object.entries(custom).find(([, v]) => v === t);
+      if (entry) {
+        custom[entry[0]] = newName;
+        patch[ck] = custom;
       }
-      if(!found) renames[t]=newName;
-      patch[rk]=renames;
+    } else {
+      const renames = { ...(state[rk] || {}) };
+      let found = false;
+      for (const [orig, renamed] of Object.entries(renames)) {
+        if (renamed === t) {
+          renames[orig] = newName;
+          found = true;
+          break;
+        }
+      }
+      if (!found) renames[t] = newName;
+      patch[rk] = renames;
     }
+
     await persist(patch);
   } else {
-    await setMeta(pid,g,t,meta);
+    await setMeta(pid, g, t, meta);
   }
+
   closeDrawer();
   show(currentId);
   toast('Task updated');
 }
 
-async function deleteTask(){
-  if(!dCtx){
+async function deleteTask() {
+  if (!dCtx) {
+    console.error("deleteTask: dCtx is null");
     toast("Cannot delete – internal error");
-    console.warn("deleteTask called but dCtx is null");
     return;
   }
 
-  const {pid,g,t} = dCtx;
+  const { pid, g, t } = dCtx;
+  console.log("Deleting task:", t, "in group:", g, "phase:", pid);
 
-  if(!confirm(`Delete "${t}" permanently?\nThis cannot be undone.`)) return;
+  if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) return;
 
   const patch = {};
-  const key = fk(pid,g,t);
-  patch[key] = null;
+  patch[fk(pid, g, t)] = null;
 
-  // Clean custom
   const ck = '__custom__' + pid + '__' + g;
-  if(state[ck]){
-    const custom = {...state[ck]};
-    const entry = Object.entries(custom).find(([,v])=>v===t);
-    if(entry){
+  if (state[ck]) {
+    const custom = { ...state[ck] };
+    const entry = Object.entries(custom).find(([, v]) => v === t);
+    if (entry) {
       delete custom[entry[0]];
       patch[ck] = Object.keys(custom).length ? custom : null;
     }
   }
 
-  // Clean rename if exists
   const rk = '__renames__' + pid + '__' + g;
-  if(state[rk]){
-    const renames = {...state[rk]};
+  if (state[rk]) {
+    const renames = { ...state[rk] };
     let changed = false;
-    for(const [orig,cur] of Object.entries(renames)){
-      if(cur === t){
+    for (const [orig, current] of Object.entries(renames)) {
+      if (current === t) {
         delete renames[orig];
         changed = true;
         break;
       }
     }
-    if(!changed && renames[t]){
+    if (!changed && renames[t]) {
       delete renames[t];
       changed = true;
     }
-    if(changed) patch[rk] = Object.keys(renames).length ? renames : null;
+    if (changed) patch[rk] = Object.keys(renames).length ? renames : null;
   }
+
+  console.log("Delete patch:", patch);
 
   try {
     await persist(patch);
     closeDrawer();
     show(currentId);
-    toast('🗑 Task permanently deleted');
-  } catch(err){
+    toast('Task permanently deleted');
+  } catch (err) {
     console.error("Delete failed:", err);
-    toast("Delete failed – check console");
+    toast('Delete failed – check console');
   }
 }
 
+// ─── APP EXPORTS & BOOT ─────────────────────────────────────────────────────
 window.APP = {
-  show, openDrawer, closeDrawer, doToggle, doCyc, doAdd, doNote,
-  selStatus: s => { dStatus = s; renderStatusChips(); },
-  saveDrawer, deleteTask
+  show,
+  openDrawer,
+  closeDrawer,
+  doToggle,
+  doCyc,
+  doAdd,
+  doNote,
+  selStatus,
+  saveDrawer,
+  deleteTask
 };
 
-function boot(){
-  renderSidebar('overview');
+function boot() {
+  // renderSidebar('overview');
   show('overview');
   initFirebase();
 }
 
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',boot);
-}else{
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
   boot();
 }
 </script>
