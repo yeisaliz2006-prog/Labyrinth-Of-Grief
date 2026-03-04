@@ -5,417 +5,141 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Labyrinth Of Grief — Production Pipeline</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
-
 <style>
-:root {
-  --bg: #0a0806; --surface: #120f0a; --surface2: #1a1410; --surface3: #221c15;
-  --border: #2e2318; --red: #a01a1a; --red-bright: #e03030; --red-dim: #6b1a1a;
-  --red-glow: rgba(180,30,30,0.12); --blocked: #8b2a1a; --blocked-bright: #d44a2a;
-  --green: #2a5c2a; --green-bright: #4a9c4a; --blue: #1a3a6b; --blue-bright: #4a7cc7;
-  --text: #d4c4a0; --text-dim: #7a6a50; --text-bright: #f0e0c0;
-}
-* { box-sizing:border-box; margin:0; padding:0; }
-body { background:var(--bg); color:var(--text); font-family:'Crimson Pro',Georgia,serif; font-size:16px; min-height:100vh; overflow-x:hidden; }
-
-/* ── (your existing CSS remains unchanged – keeping it compact here) ── */
-header { background:linear-gradient(180deg,#0d0a06 0%,var(--surface) 100%); border-bottom:1px solid var(--border); padding:0 2rem; position:sticky; top:0; z-index:200; display:flex; align-items:center; justify-content:space-between; height:64px; box-shadow:0 4px 32px rgba(0,0,0,0.6); }
-.logo { font-family:'Cinzel',serif; font-size:1.1rem; font-weight:900; color:var(--red-bright); letter-spacing:0.15em; text-transform:uppercase; display:flex; align-items:center; gap:0.75rem; }
-.logo-icon { width:24px; height:24px; background:var(--red); clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); animation:torchflicker 3s ease-in-out infinite; }
-@keyframes torchflicker { 0%,100%{opacity:1;transform:scale(1)} 25%{opacity:0.8;transform:scale(0.97)} 50%{opacity:1;transform:scale(1.02)} 75%{opacity:0.9;transform:scale(0.98)} }
-/* ... rest of your CSS ... (omitted for brevity in this message – keep your original styles) */
-.drawer-delete { width:100%; padding:0.6rem; background:none; border:1px solid #3a1010; color:#7a3030; font-family:'Cinzel',serif; font-size:0.68rem; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; border-radius:3px; transition:all .2s; margin-top:0.25rem; }
-.drawer-delete:hover { background:rgba(160,26,26,0.18); border-color:var(--red-bright); color:var(--red-bright); box-shadow:0 0 8px rgba(160,26,26,0.2); }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo"><div class="logo-icon"></div>Labyrinth Of Grief</div>
-  <div class="header-right">
-    <div class="header-stats">
-      <div class="stat-item"><span class="stat-num" id="stat-done">0</span><span class="stat-label">Complete</span></div>
-      <div class="stat-divider"></div>
-      <div class="stat-item"><span class="stat-num" id="stat-inprog">0</span><span class="stat-label">In Progress</span></div>
-      <div class="stat-divider"></div>
-      <div class="stat-item"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Total Tasks</span></div>
-    </div>
-    <div class="sync-badge syncing" id="syncBadge"><div class="sync-dot"></div><span id="syncLabel">Connecting</span></div>
-  </div>
-</header>
-
-<div class="progress-bar-wrap">
-  <span class="progress-label">Overall Progress</span>
-  <div class="progress-track"><div class="progress-fill" id="global-fill" style="width:0%"></div></div>
-  <span class="progress-pct" id="global-pct">0%</span>
-</div>
-
-<div class="collab-bar">
-  <span class="collab-label">Online</span>
-  <div class="collab-avatars" id="collabAvatars"></div>
-  <span class="last-sync" id="lastSync">—</span>
-</div>
-
-<div class="container">
-  <nav class="sidebar" id="sidebar"></nav>
-  <div class="main-content" id="main-content"></div>
-</div>
-
-<!-- Task Detail Drawer -->
-<div class="drawer-overlay" id="drawerOverlay" onclick="APP.closeDrawer()"></div>
-<div class="drawer" id="drawer">
-  <button class="drawer-close-btn" onclick="APP.closeDrawer()">✕</button>
-  <div class="drawer-header">
-    <div class="drawer-phase-tag" id="dPhaseTag"></div>
-    <div class="drawer-task-name" id="dTaskNameDisplay"></div>
-    <div class="drawer-status-row" id="dStatusRow"></div>
-  </div>
-  <div class="drawer-body">
-    <div class="drawer-field">
-      <label class="drawer-label">✎ Task Name</label>
-      <input class="di" id="dTaskName" placeholder="Task name…" autocomplete="off">
-    </div>
-    <div class="drawer-field">
-      <label class="drawer-label">⚔ Assignee</label>
-      <input class="di" id="dAssignee" placeholder="Who owns this task?" autocomplete="off">
-    </div>
-    <div class="drawer-field">
-      <label class="drawer-label">◷ Estimated Timeframe</label>
-      <select class="di" id="dTimeframe">
-        <option value="">— Select estimate —</option>
-        <option value="1-2h">1–2 hours</option>
-        <option value="half-day">Half day</option>
-        <option value="1d">1 day</option>
-        <option value="2-3d">2–3 days</option>
-        <option value="1w">~1 week</option>
-        <option value="2w">~2 weeks</option>
-        <option value="1m">~1 month</option>
-        <option value="ongoing">Ongoing</option>
-      </select>
-    </div>
-    <div class="drawer-field">
-      <label class="drawer-label">✦ Notes & Details</label>
-      <textarea class="di" id="dNotes" placeholder="Blockers, references, decisions, links…"></textarea>
-    </div>
-  </div>
-  <div class="drawer-footer">
-    <div class="drawer-footer-actions">
-      <button class="drawer-cancel" onclick="APP.closeDrawer()">Cancel</button>
-      <button class="drawer-save" onclick="APP.saveDrawer()">Save Changes</button>
-    </div>
-    <button class="drawer-delete" onclick="APP.deleteTask()"><span style="color:var(--red-bright)">🗑 Permanently Delete</span></button>
-  </div>
-</div>
-
-<div class="toast-container" id="toastContainer"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAMdDRWGxpCIk60YRn355xXK4TASE8zBbo",
-  authDomain: "labyrinth-of-grief-6a2e2.firebaseapp.com",
-  databaseURL: "https://labyrinth-of-grief-6a2e2-default-rtdb.firebaseio.com",
-  projectId: "labyrinth-of-grief-6a2e2",
-  storageBucket: "labyrinth-of-grief-6a2e2.firebasestorage.app",
-  messagingSenderId: "148640942330",
-  appId: "1:148640942330:web:8f091f07193cd434bba143"
-};
-
-const PHASES = [ /* your PHASES array – keep it unchanged */ 
-  { id:'overview', num:'★', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
-  // ... rest of PHASES (copy from your original code)
-];
-
-const SID = Math.random().toString(36).slice(2,8).toUpperCase();
-const COLORS = ['#e03030','#4a7cc7','#4a9c4a','#c8a030','#9c4a9c','#30c8c8','#c87040','#7cc740'];
-const MY_COLOR = COLORS[Math.floor(Math.random()*COLORS.length)];
-
-let state = {};
-let db, stateRef, presenceRef;
-let currentId = 'overview';
-let dStatus = 'todo';
-let dCtx = null;
-let pendingWrites = 0;
-
-const $ = id => document.getElementById(id);
-
-function badge(s, label) {
-  const b = $('syncBadge'), l = $('syncLabel');
-  b.className = 'sync-badge ' + s;
-  l.textContent = label || { syncing:'Syncing…', live:'Live', offline:'Offline' }[s] || s;
-}
-
-function toast(msg, dur = 2800) {
-  const c = $('toastContainer'), el = document.createElement('div');
-  el.className = 'toast'; el.textContent = msg; c.appendChild(el);
-  setTimeout(() => { el.classList.add('fadeout'); setTimeout(() => el.remove(), 400); }, dur);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// FIREBASE
-// ──────────────────────────────────────────────────────────────────────────────
-
-function initFirebase() {
-  try {
-    const app = initializeApp(firebaseConfig);
-    db = getDatabase(app);
-    stateRef = ref(db, 'pipeline/state');
-    presenceRef = ref(db, 'pipeline/presence');
-
-    badge('syncing');
-
-    onValue(stateRef, snap => {
-      if (pendingWrites > 0) {
-        console.log('[sync] Ignoring snapshot – local writes still pending');
-        return;
-      }
-      state = snap.val() || {};
-      show(currentId);
-      updateStats();
-      badge('live');
-      $('lastSync').textContent = 'Live · ' + new Date().toLocaleTimeString();
-    });
-
-    heartbeat();
-    setInterval(heartbeat, 15000);
-    setInterval(cleanPresence, 30000);
-    toast('Connected — You are ' + SID);
-  } catch(e) {
-    console.error(e);
-    badge('offline');
-    toast('Firebase connection failed');
-  }
-}
-
-async function persist(patch) {
-  if (!Object.keys(patch).length) return;
-
-  pendingWrites++;
-
-  // Optimistic UI update
-  Object.assign(state, patch);
-  show(currentId);
-  updateStats();
-
-  if (!db) {
-    pendingWrites--;
-    return;
-  }
-
-  try {
-    badge('syncing');
-    await update(stateRef, patch);
-  } catch (e) {
-    console.error('persist failed', e);
-    badge('offline');
-    toast('Save failed – check connection');
-  } finally {
-    pendingWrites = Math.max(0, pendingWrites - 1);
-    if (pendingWrites === 0) badge('live');
-  }
-}
-
-async function heartbeat() {
-  if (!db) return;
-  try {
-    await set(ref(db, 'pipeline/presence/' + SID), { id:SID, color:MY_COLOR, ts:Date.now() });
-    const snap = await get(presenceRef);
-    const all = snap.val() || {};
-    const active = Object.values(all).filter(u => Date.now() - u.ts < 45000);
-    $('collabAvatars').innerHTML = active.map(u =>
-      `<div class="collab-avatar" style="background:${u.color}25;border-color:${u.color}60;color:${u.color}" title="User ${u.id}${u.id===SID?' (you)':''}">${u.id.slice(0,2)}</div>`
-    ).join('');
-    if (active.length > 1) badge('live', active.length + ' Online');
-  } catch(e) {}
-}
-
-async function cleanPresence() {
-  if (!db) return;
-  try {
-    const snap = await get(presenceRef);
-    const all = snap.val() || {}, updates = {};
-    for (const [k, v] of Object.entries(all)) {
-      if (Date.now() - v.ts > 60000) updates['pipeline/presence/' + k] = null;
-    }
-    if (Object.keys(updates).length) await update(ref(db), updates);
-  } catch(e) {}
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// HELPERS (fk, getMeta, getS, setMeta, pStats, etc.) – keep mostly unchanged
-// ──────────────────────────────────────────────────────────────────────────────
-
-function fk(p, g, t) { return p + '|||' + g + '|||' + btoa(unescape(encodeURIComponent(t))).replace(/[.#$/[\]]/g,'_'); }
-function getMeta(p,g,t) { return state[fk(p,g,t)] || {}; }
-function getS(p,g,t) { return getMeta(p,g,t).status || 'todo'; }
-async function setMeta(p,g,t,m) {
-  const k = fk(p,g,t);
-  const patch = {}; patch[k] = { ...getMeta(p,g,t), ...m };
-  await persist(patch);
-}
-
-// ... keep resolvedTasks, pStats, allStats, cyc, ico, slbl, scls, tflbl, pills unchanged ...
-
-// ──────────────────────────────────────────────────────────────────────────────
-// RENDER & ACTIONS (keep most, just ensure they call persist correctly)
-// ──────────────────────────────────────────────────────────────────────────────
-
-// show, updateStats, doToggle, doCyc, doAdd, doNote – keep as is
-
-async function saveDrawer() {
-  if (!dCtx) return;
-  const { pid, g, t } = dCtx;
-  const newName = ($('dTaskName').value || '').trim() || t;
-  const meta = {
-    status: dStatus,
-    assignee: $('dAssignee').value.trim(),
-    timeframe: $('dTimeframe').value,
-    notes: $('dNotes').value.trim(),
-  };
-
-  if (newName !== t) {
-    const patch = {};
-    patch[fk(pid, g, newName)] = { ...getMeta(pid, g, t), ...meta };
-    patch[fk(pid, g, t)] = null;
-
-    const ck = '__custom__' + pid + '__' + g;
-    const rk = '__renames__' + pid + '__' + g;
-
-    if (state[ck]) {
-      const custom = { ...state[ck] };
-      const entry = Object.entries(custom).find(([,v]) => v === t);
-      if (entry) {
-        custom[entry[0]] = newName;
-        patch[ck] = custom;
-      }
-    } else {
-      const renames = { ...(state[rk] || {}) };
-      let found = false;
-      for (const [orig, val] of Object.entries(renames)) {
-        if (val === t) { renames[orig] = newName; found = true; break; }
-      }
-      if (!found) renames[t] = newName;
-      patch[rk] = renames;
-    }
-
-    await persist(patch);
-  } else {
-    await setMeta(pid, g, t, meta);
-  }
-
-  closeDrawer();
-  show(currentId);
-  toast('Task updated');
-}
-
-async function deleteTask() {
-  if (!dCtx) {
-    console.error("deleteTask: dCtx is null or undefined");
-    toast("Cannot delete – internal error (check console)");
-    return;
-  }
-
-  const { pid, g, t } = dCtx;
-  console.log("deleteTask called →", { pid, g, t });
-
-  if (!confirm(`Permanently delete "${t}"?\nThis cannot be undone.`)) {
-    console.log("User cancelled delete");
-    return;
-  }
-
-  const patch = {};
-  const taskKey = fk(pid, g, t);
-  patch[taskKey] = null;
-  console.log("Removing task key:", taskKey);
-
-  // custom tasks cleanup
-  const ck = '__custom__' + pid + '__' + g;
-  if (state[ck]) {
-    const custom = { ...state[ck] };
-    const entry = Object.entries(custom).find(([, value]) => value === t);
-    if (entry) {
-      console.log("Removing from custom list, index:", entry[0]);
-      delete custom[entry[0]];
-      patch[ck] = Object.keys(custom).length ? custom : null;
-    }
-  }
-
-  // renames cleanup
-  const rk = '__renames__' + pid + '__' + g;
-  if (state[rk]) {
-    const renames = { ...state[rk] };
-    let changed = false;
-    for (const [orig, cur] of Object.entries(renames)) {
-      if (cur === t) {
-        console.log("Clearing rename entry:", orig, "→", t);
-        delete renames[orig];
-        changed = true;
-        break;
-      }
-    }
-    if (!changed && renames[t]) {
-      console.log("Clearing direct rename:", t);
-      delete renames[t];
-      changed = true;
-    }
-    if (changed) {
-      patch[rk] = Object.keys(renames).length ? renames : null;
-    }
-  }
-
-  console.log("Final patch being sent:", patch);
-
-  try {
-    await persist(patch);
-    console.log("persist() completed successfully");
-    closeDrawer();
-    show(currentId);
-    toast('🗑 Task permanently deleted');
-  } catch (err) {
-    console.error("Delete failed:", err);
-    toast('Delete failed – check console');
-  }
-}
-  const rk = '__renames__' + pid + '__' + g;
-  if (state[rk]) {
-    const renames = { ...state[rk] };
-    let changed = false;
-    for (const [orig, cur] of Object.entries(renames)) {
-      if (cur === t) { delete renames[orig]; changed = true; break; }
-    }
-    if (!changed && renames[t]) { delete renames[t]; changed = true; }
-    if (changed) patch[rk] = Object.keys(renames).length ? renames : null;
-  }
-
-  await persist(patch);
-  closeDrawer();
-  show(currentId);
-  toast('Task permanently deleted');
-}
-
-// ─── BOOT ─────────────────────────────────────────────────────────────────────
-
-function boot() {
-  // renderSidebar('overview');
-  show('overview');
-  initFirebase();
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
-} else {
-  boot();
-}
-
-window.APP = {
-  show, closeDrawer, openDrawer, doToggle, doCyc, doAdd, doNote,
-  selStatus: s => { dStatus = s; renderStatusChips(); },
-  saveDrawer, deleteTask
-};
-
-// (keep openDrawer, renderStatusChips, etc. from your original code)
-</script>
-</body>
-</html>
-
+:root{--bg:#0a0806;--surface:#120f0a;--surface2:#1a1410;--surface3:#221c15;--border:#2e2318;--red:#a01a1a;--red-bright:#e03030;--red-dim:#6b1a1a;--red-glow:rgba(180,30,30,0.12);--blocked:#8b2a1a;--blocked-bright:#d44a2a;--green:#2a5c2a;--green-bright:#4a9c4a;--blue:#1a3a6b;--blue-bright:#4a7cc7;--text:#d4c4a0;--text-dim:#7a6a50;--text-bright:#f0e0c0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Crimson Pro',Georgia,serif;font-size:16px;min-height:100vh;overflow-x:hidden}
+header{background:linear-gradient(180deg,#0d0a06,var(--surface));border-bottom:1px solid var(--border);padding:0 2rem;position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 32px rgba(0,0,0,.6)}
+.logo{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;color:var(--red-bright);letter-spacing:.15em;text-transform:uppercase;display:flex;align-items:center;gap:.75rem}
+.logo-icon{width:24px;height:24px;background:var(--red);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:torchflicker 3s ease-in-out infinite}
+@keyframes torchflicker{0%,100%{opacity:1;transform:scale(1)}25%{opacity:.8;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}75%{opacity:.9;transform:scale(.98)}}
+.header-right{display:flex;align-items:center;gap:1.5rem}
+.header-stats{display:flex;gap:2rem;align-items:center}
+.stat-item{text-align:center}
+.stat-num{font-family:'Cinzel',serif;font-size:1.4rem;font-weight:600;color:var(--red-bright);display:block;line-height:1}
+.stat-label{font-size:.7rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
+.stat-divider{width:1px;height:32px;background:var(--border)}
+.sync-badge{display:flex;align-items:center;gap:.4rem;font-family:'Cinzel',serif;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);padding:.3rem .7rem;border:1px solid var(--border);border-radius:2px;transition:border-color .3s}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);transition:background .3s}
+.sync-badge.syncing .sync-dot{background:var(--red-bright);animation:blink .7s infinite}
+.sync-badge.synced .sync-dot,.sync-badge.live .sync-dot{background:var(--green-bright)}
+.sync-badge.live .sync-dot{animation:blink 2s infinite}
+.sync-badge.live{border-color:rgba(74,156,74,.35)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.progress-bar-wrap{background:var(--surface);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
+.progress-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;min-width:120px}
+.progress-track{flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));border-radius:3px;transition:width .5s ease;box-shadow:0 0 8px var(--red)}
+.progress-pct{font-family:'Cinzel',serif;font-size:.85rem;color:var(--red-bright);min-width:40px;text-align:right}
+.collab-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:.35rem 2rem;display:flex;align-items:center;gap:.75rem}
+.collab-label{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
+.collab-avatars{display:flex;gap:.3rem}
+.collab-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-family:'Cinzel',serif;border:1px solid;cursor:default;transition:transform .15s}
+.collab-avatar:hover{transform:scale(1.2)}
+.last-sync{margin-left:auto;font-size:.68rem;color:var(--text-dim);font-style:italic}
+.container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 118px);overflow:hidden}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--surface)}
+.sidebar::-webkit-scrollbar{width:4px}.sidebar::-webkit-scrollbar-thumb{background:var(--red-dim)}
+.sidebar-section-title{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;color:var(--text-dim);text-transform:uppercase;padding:1.2rem 1.2rem .5rem;border-top:1px solid var(--border)}
+.sidebar-section-title:first-child{border-top:none}
+.phase-btn{display:flex;align-items:center;gap:.75rem;padding:.65rem 1.2rem;cursor:pointer;transition:all .15s;border-left:3px solid transparent;width:100%;background:none;border-right:none;border-top:none;border-bottom:none;text-align:left;color:var(--text);font-family:'Crimson Pro',serif;font-size:.95rem}
+.phase-btn:hover{background:var(--red-glow);color:var(--text-bright)}
+.phase-btn.active{background:var(--red-glow);border-left-color:var(--red);color:var(--red-bright)}
+.phase-num{font-family:'Cinzel',serif;font-size:.7rem;color:var(--red-dim);min-width:20px}
+.phase-btn.active .phase-num{color:var(--red)}
+.phase-mini-progress{margin-left:auto;font-size:.7rem;color:var(--text-dim)}
+.phase-btn.active .phase-mini-progress{color:var(--red)}
+.main-content{overflow-y:auto;padding:2rem;scrollbar-width:thin;scrollbar-color:var(--red-dim) var(--bg)}
+.main-content::-webkit-scrollbar{width:4px}.main-content::-webkit-scrollbar-thumb{background:var(--red-dim)}
+.panel-header{margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.panel-header-left{flex:1}
+.phase-tag{font-family:'Cinzel',serif;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.4rem}
+.panel-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:600;color:var(--text-bright);line-height:1.2;margin-bottom:.4rem}
+.panel-subtitle{font-size:1rem;color:var(--text-dim);font-style:italic}
+.phase-progress-ring{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex-shrink:0}
+.ring-pct{font-family:'Cinzel',serif;font-size:1.5rem;color:var(--red-bright);line-height:1}
+.ring-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em}
+.task-group{margin-bottom:1.5rem}
+.task-group-header{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.6rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.5rem}
+.group-count{color:var(--red-dim);font-size:.7rem}
+.task-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;margin-bottom:3px;background:var(--surface);border:1px solid var(--border);border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.task-item::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border);transition:background .15s}
+.task-item:hover{border-color:var(--red-dim);background:var(--surface2)}
+.task-item:hover::before{background:var(--red-dim)}
+.task-item.done::before{background:var(--green-bright)}
+.task-item.done{opacity:.6}
+.task-item.inprogress::before{background:var(--red);box-shadow:0 0 6px rgba(160,26,26,.5)}
+.task-item.review::before{background:var(--blue-bright)}
+.task-item.blocked::before{background:var(--blocked-bright)}
+.task-check{width:18px;height:18px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.75rem;transition:all .15s;cursor:pointer}
+.task-item.done .task-check{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
+.task-item.inprogress .task-check{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
+.task-item.review .task-check{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
+.task-item.blocked .task-check{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
+.task-text{flex:1;font-size:.95rem;color:var(--text);line-height:1.3}
+.task-item.done .task-text{text-decoration:line-through;color:var(--text-dim)}
+.task-meta-pills{display:flex;gap:.35rem;align-items:center;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:180px}
+.task-pill{font-size:.58rem;padding:2px 6px;border-radius:2px;border:1px solid;font-family:'Cinzel',serif;letter-spacing:.04em;white-space:nowrap}
+.pill-assign{border-color:rgba(74,124,199,.45);color:#6a9cd9;background:rgba(26,58,107,.3)}
+.pill-time{border-color:rgba(74,156,74,.45);color:#80c880;background:rgba(42,92,42,.2)}
+.task-status-btn{font-size:.65rem;padding:2px 8px;border-radius:2px;border:1px solid;cursor:pointer;font-family:'Cinzel',serif;letter-spacing:.05em;text-transform:uppercase;background:none;transition:all .15s;white-space:nowrap}
+.btn-todo{border-color:var(--text-dim);color:var(--text-dim)}.btn-todo:hover{border-color:var(--red-dim);color:var(--red-dim)}
+.btn-inprogress{border-color:var(--red);color:var(--red)}
+.btn-review{border-color:var(--blue-bright);color:var(--blue-bright)}
+.btn-done{border-color:var(--green-bright);color:var(--green-bright)}
+.btn-blocked{border-color:var(--blocked-bright);color:var(--blocked-bright)}
+.add-task-row{display:flex;gap:.5rem;margin-top:.75rem;margin-bottom:.5rem}
+.add-task-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.9rem;border-radius:3px;outline:none;transition:border-color .15s}
+.add-task-input:focus{border-color:var(--red-dim)}
+.add-task-input::placeholder{color:var(--text-dim);font-style:italic}
+.add-task-btn-sm{background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);padding:.5rem 1rem;font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;cursor:pointer;transition:all .15s}
+.add-task-btn-sm:hover{background:var(--red);color:var(--bg)}
+.notes-section{margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.notes-label{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;margin-bottom:.5rem}
+.notes-input{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:.75rem;font-family:'Crimson Pro',serif;font-size:.95rem;line-height:1.6;font-style:italic;resize:vertical;min-height:90px;border-radius:3px;outline:none}
+.notes-input:focus{border-color:var(--red-dim)}
+.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.overview-card{background:var(--surface);border:1px solid var(--border);padding:1rem;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.overview-card:hover{border-color:var(--red-dim);background:var(--surface2)}
+.card-progress-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,var(--red-dim),var(--red-bright));transition:width .6s ease}
+.card-num{font-family:'Cinzel',serif;font-size:.65rem;color:var(--red-dim);letter-spacing:.1em;margin-bottom:.3rem}
+.card-title{font-family:'Cinzel',serif;font-size:.9rem;font-weight:600;color:var(--text-bright);margin-bottom:.4rem;line-height:1.3}
+.card-pct{font-size:1.8rem;font-family:'Cinzel',serif;color:var(--red-bright);line-height:1;margin-bottom:.2rem}
+.card-tasks{font-size:.8rem;color:var(--text-dim)}
+.legend{display:flex;gap:1.5rem;margin-bottom:1rem;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--text-dim)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+/* DRAWER */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:400px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);z-index:301;transform:translateX(105%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
+.drawer::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);pointer-events:none}
+.drawer.open{transform:translateX(0)}
+.drawer-header{padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border);background:linear-gradient(180deg,var(--surface2),var(--surface));position:sticky;top:0;z-index:1}
+.drawer-phase-tag{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.18em;text-transform:uppercase;color:var(--red-dim);margin-bottom:.35rem}
+.drawer-task-name{font-family:'Cinzel',serif;font-size:.95rem;color:var(--text-bright);line-height:1.45;margin-bottom:1rem;padding-right:2rem}
+.drawer-status-row{display:flex;gap:.4rem;flex-wrap:wrap}
+.status-chip{font-family:'Cinzel',serif;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .65rem;border:1px solid var(--border);border-radius:2px;cursor:pointer;transition:all .15s;color:var(--text-dim);user-select:none}
+.chip-todo.sel{background:rgba(122,106,80,.2);border-color:var(--text-dim);color:var(--text-bright)}
+.chip-inprogress.sel{background:var(--red-dim);border-color:var(--red);color:var(--red-bright)}
+.chip-review.sel{background:var(--blue);border-color:var(--blue-bright);color:var(--blue-bright)}
+.chip-done.sel{background:var(--green);border-color:var(--green-bright);color:var(--green-bright)}
+.chip-blocked.sel{background:var(--blocked);border-color:var(--blocked-bright);color:var(--blocked-bright)}
+.status-chip:hover{border-color:var(--text-dim);color:var(--text)}
+.drawer-body{padding:1.25rem 1.5rem;flex:1;display:flex;flex-direction:column;gap:1.2rem}
+.drawer-field{display:flex;flex-direction:column;gap:.35rem}
+.drawer-label{font-family:'Cinzel',serif;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim)}
+.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;font-family:'Crimson Pro',serif;font-size:.95rem;border-radius:3px;outline:none;transition:border-color .15s;width:100%}
+.di:focus{border-color:var(--red-dim)}
+.di::placeholder{color:var(--text-dim);font-style:italic}
+select.di{font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.04em;cursor:pointer}
+select.di option{background:var(--surface2)}
+textarea.di{resize:vertical;min-height:90px;line-height:1.6;font-style:italic}
+.drawer-footer{padding:1rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:.5rem;border-top:1px solid var(--border)}
+.drawer-footer-actions{display:flex;gap:.6rem}
+.drawer-save{flex:1;padding:.65rem;background:var(--red-dim);border:1px solid var(--red);color:var(--red-bright);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
+.drawer-save:hover{background:var(--red);color:var(--bg)}
+.drawer-cancel{padding:.65rem 1rem;background:none;border:1px solid var(--border);color:var(--text-dim);font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .15s}
+.drawer-cancel:hover{border-color:var(--text-dim);color:var(--text)}
+.drawer-delete{width:100%;padding:.6rem;background:none;border:1px solid #3a1010;color:#7a3030;font-family:'Cinzel',serif;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;margin-top:.25rem}
+.drawer-delete:hover{background:rgba(160,26,26,.18);border-color:var(--red-bright);color:var(--red-bright);box-shadow:0 0
