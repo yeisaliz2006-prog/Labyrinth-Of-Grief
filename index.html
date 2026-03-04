@@ -245,39 +245,39 @@ const firebaseConfig = {
 // ─── PHASES ──────────────────────────────────────────────────────────────────
 const PHASES = [
   { id:'overview', num:'&#x2605;', title:'Project Overview', subtitle:'Full pipeline at a glance', isOverview:true },
-  { id:'phase1', num:'01', title:'Phase 1: Analysis', subtitle:'Requirements & Definition', groups:[
-    { name:'Scope Definition', tasks:['Project title and core statement','Project brief documentation','Target audience and environment','Define user journey','Define narrative milestones'] },
-    { name:'Pipeline Units', tasks:['Unit 1 structure documentation','Unit 2 structure documentation','Unit 3 structure documentation','Intermission phase planning','Define flow between units'] },
+  { id:'phase1', num:'01', title:'Phase 1: Planning', subtitle:'Requirements & Definition', groups:[
+    { name:'Scope Definition', tasks:['Project title and core statement','Project brief documentation','Target outcome and environment','Define user journey','Define milestones'] },
+    { name:'Unit Definitions', tasks:['Unit 1 structure documentation','Unit 2 structure documentation','Unit 3 structure documentation','Intermission planning','Define flow between units'] },
     { name:'References', tasks:['Reference: visual tone 1','Reference: visual tone 2','Reference: visual tone 3','Reference: interaction mechanics','Reference: layout strategy'] },
-    { name:'Content Requirements', tasks:['Asset list: deliverables','Asset list: narrative flow','User interaction requirement','Lore requirement per milestone','Resolution sequence design'] },
+    { name:'Content Requirements', tasks:['Requirement: core deliverables','Requirement: workflow','User interaction requirement','Outcome requirement','Resolution sequence design'] },
   ]},
-  { id:'phase2', num:'02', title:'Phase 2: System Design', subtitle:'Technical & Logical Architecture', groups:[
-    { name:'Functional Documents', tasks:['Technical doc: Unit 1','Technical doc: Unit 2','Technical doc: Unit 3','Logic: secret requirements','Logic: step-by-step resolution'] },
-    { name:'Unit Components', tasks:['Component A: standard patrol logic','Component B: trigger conditions','Component C: pathfinding logic','Component D: proximity events','Component E: detection logic','Component F: group logic','Component G: primary entity behavior','Component H: secondary entity behavior','Component I: tertiary entity behavior'] },
-    { name:'Logical Flow', tasks:['Unit 1: input/output logic','Unit 1: trigger sequence','Unit 1: task loop','Unit 2: trigger sequence','Unit 2: weighting logic','Unit 2: input/output launch','Unit 2: structural integrity logic','Unit 3: sequence logic','Unit 3: redirect logic','Unit 3: barrier removal logic'] },
+  { id:'phase2', num:'02', title:'Phase 2: System Design', subtitle:'Architectural Planning', groups:[
+    { name:'Documentation', tasks:['Technical spec: Unit 1','Technical spec: Unit 2','Technical spec: Unit 3','Logic: secret requirements','Logic: step-by-step resolution'] },
+    { name:'Component Design', tasks:['Component A: standard patrol logic','Component B: trigger conditions','Component C: pathfinding logic','Component D: proximity events','Component E: detection logic','Component F: group logic','Component G: primary behavior','Component H: secondary behavior','Component I: tertiary behavior'] },
+    { name:'Logical Flow', tasks:['Unit 1: input/output logic','Unit 1: trigger sequence','Unit 1: task loop','Unit 2: trigger sequence','Unit 2: weighting logic','Unit 2: input/output mechanism','Unit 2: structural integrity logic','Unit 3: sequence logic','Unit 3: redirect logic','Unit 3: barrier removal logic'] },
     { name:'Standardization', tasks:['Define feature order','Define status checkpoints','Define rhythm/pace cadence','Balance core vs optional ratio'] },
   ]},
-  { id:'phase3', num:'03', title:'Phase 3: Prototype', subtitle:'First Iteration', groups:[
-    { name:'Prototype: Unit 1', tasks:['Geometry scale test','Testing interaction distance','Placeholder entity placement','Arena layout test','Logic verification'] },
+  { id:'phase3', num:'03', title:'Phase 3: Initial Prototype', subtitle:'First Iteration', groups:[
+    { name:'Prototype: Unit 1', tasks:['Geometry scale test','Testing interaction distance','Placeholder component placement','Arena layout test','Logic verification'] },
     { name:'Prototype: Unit 2', tasks:['Vertical scale test','Physics verification','Path layout testing','Structural collision test','Arena sightline verification'] },
     { name:'Prototype: Unit 3', tasks:['Scale test','Traversal point testing','Internal pathing test','Traversal gap margins','Arena boundary geometry'] },
-    { name:'Mechanic Validation', tasks:['Movement responsiveness test','Input feedback test','Entity detection visualization','Environment visualization','Save system test'] },
+    { name:'Validation', tasks:['Movement responsiveness test','Input feedback test','Component detection visualization','Environment visualization','Save system test'] },
   ]},
-  { id:'phase4', num:'04', title:'Phase 4: Asset Production', subtitle:'Content, Modeling, Textures', groups:[
-    { name:'Visual Concepts', tasks:['Character silhouettes','Prop silhouettes','Core unit entity design','Entity variant 1','Entity variant 2','Entity variant 3','Entity variant 4','Environment detail 1','Environment detail 2','Environment detail 3','Props: primary set'] },
-    { name:'3D Assets: Characters', tasks:['Character 1 mesh','Character 2 mesh','Entity variants','Skeleton variants','Environment units','Composite units','Secondary mesh'] },
+  { id:'phase4', num:'04', title:'Phase 4: Asset Production', subtitle:'Design & Modeling', groups:[
+    { name:'Visual Concepts', tasks:['Character silhouettes','Prop silhouettes','Primary component design','Component variant 1','Component variant 2','Component variant 3','Component variant 4','Environment detail 1','Environment detail 2','Environment detail 3','Props: primary set'] },
+    { name:'3D Assets: Characters', tasks:['Character 1 mesh','Character 2 mesh','Component variants','Skeleton variants','Environment units','Composite units','Secondary mesh'] },
     { name:'3D Assets: Environment', tasks:['Kit 1 tiles','Kit 2 tiles','Kit 3 tiles','Structural props','Interactive props','Destructible variants'] },
     { name:'Texturing & Surface', tasks:['UV Mapping: characters','Base maps: characters','Normal maps: characters','Detail maps: characters','Environment textures','Prop texturing'] },
     { name:'Motion & Animation', tasks:['Base rig','Base motion cycle','Rig 1 animation set','Rig 2 animation set','Rig 3 animation set','Rig 4 animation set','Rig 5 animation set','Composite animation sets'] },
   ]},
-  { id:'phase5', num:'05', title:'Phase 5: Implementation', subtitle:'Asset Integration', groups:[
-    { name:'Integration Tasks', tasks:['Folder organization','Asset scale verification','Environment snap verification','Collision assignment','Shader implementation'] },
-    { name:'Physics Engine', tasks:['Physics controller setup','Raycast system','Physics object weight response','Breakpoint logic','Interaction physics','Volume logic'] },
-    { name:'Animation Logic', tasks:['State machine 1','State machine 2','State machine 3','Blend tree optimization','Event-driven triggers'] },
+  { id:'phase5', num:'05', title:'Phase 5: Implementation', subtitle:'Integration', groups:[
+    { name:'Pipeline', tasks:['Folder organization','Asset scale verification','Environment snap verification','Collision assignment','Shader implementation'] },
+    { name:'Physics', tasks:['Physics controller setup','Raycast system','Physics object weight response','Breakpoint logic','Interaction physics','Volume logic'] },
+    { name:'Logic Integration', tasks:['State machine 1','State machine 2','State machine 3','Blend tree optimization','Event-driven triggers'] },
   ]},
   { id:'phase6', num:'06', title:'Phase 6: Programming', subtitle:'Systems Logic', groups:[
     { name:'Core Systems', tasks:['Movement core','Interaction system','Stealth detection','Sound propagation','Detection zones'] },
-    { name:'Entity Logic', tasks:['Entity type 1 logic','Entity type 2 logic','Entity type 3 logic','Entity type 4 logic','Entity type 5 logic','Entity type 6 logic'] },
+    { name:'Component Logic', tasks:['Component type 1 logic','Component type 2 logic','Component type 3 logic','Component type 4 logic','Component type 5 logic','Component type 6 logic'] },
     { name:'Milestone Logic', tasks:['Milestone 1 logic','Milestone 2 logic','Milestone 3 logic','Milestone 4 logic','Milestone 5 logic','Milestone 6 logic'] },
     { name:'System Modules', tasks:['Audio emitter system','Event trigger logic','System override logic','System bypass logic','Environmental interaction'] },
     { name:'Utilities', tasks:['Data persistence','Save/Load system','System 1 logic','System 2 logic','UI feedback','Config menu','Data tracking'] },
@@ -286,6 +286,7 @@ const PHASES = [
     { name:'Lighting', tasks:['Lighting pass: Unit 1','Lighting pass: Unit 2','Lighting pass: Unit 3','Shadow optimization','Arena lighting','Secret area lighting'] },
     { name:'Effects', tasks:['Particle pass 1','Particle pass 2','Particle pass 3','Simulation pass 1','Alert indicator','Feedback visualization','Simulation pass 2','Atmosphere pass'] },
     { name:'Audio', tasks:['Ambient track 1','Ambient track 2','Ambient track 3','Feedback intensity layer','Audio trigger events','Sound effect pass','Interaction audio'] },
+    { name:'Music', tasks:['Main theme composition','Music track 1','Music track 2','Music track 3','Theme composition A','Theme composition B','Theme composition C'] },
   ]}
 ];
 // ... (rest of the JS remains unchanged to support functionality)
